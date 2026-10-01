@@ -14,7 +14,10 @@ export type CurrentUser = {
 };
 
 const SESSION_HOURS = 12;
-const secureCookies = process.env.NODE_ENV === "production";
+// Secure by default in production; COOKIE_SECURE=false allows a plain-http local trial.
+const secureCookies = process.env.COOKIE_SECURE
+  ? process.env.COOKIE_SECURE === "true"
+  : process.env.NODE_ENV === "production";
 // The __Host- prefix makes browsers refuse the cookie unless it is Secure, host-only and path=/.
 const COOKIE_NAME = secureCookies ? "__Host-ra_session" : "ra_session";
 

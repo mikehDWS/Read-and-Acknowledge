@@ -1,0 +1,31 @@
+# Local trial: `docker compose up --build`, then open http://localhost:3000
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ack
+      POSTGRES_PASSWORD: ack
+      POSTGRES_DB: read_ack
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ack -d read_ack"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://ack:ack@db:5432/read_ack
+      APP_URL: http://localhost:3000
+      # Plain http on localhost: don't mark the session cookie Secure.
+      COOKIE_SECURE: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

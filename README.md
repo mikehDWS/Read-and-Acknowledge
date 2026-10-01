@@ -6,6 +6,33 @@ the time, giving the organisation an audit trail.
 
 This is version 1 from the project brief: *Project Brief: Document Acknowledgement Web App*.
 
+## Try it locally
+
+The quickest way is [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows, Mac or Linux).
+It runs the app and its database together; nothing else needs installing.
+
+1. Download this repository (green **Code** button → **Download ZIP**, then unzip), or `git clone` it.
+2. Open a terminal in the project folder and start it:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   The first run takes a few minutes. It's ready when you see `Ready`.
+3. In a **second** terminal, create your admin account:
+
+   ```bash
+   docker compose exec app npm run create-admin -- --name "Your Name" --email you@example.com
+   ```
+
+   It prints a link. Open it in your browser and set a password.
+4. Go to <http://localhost:3000>. Create a document, add a few people (made-up emails are fine), and
+   use **Create set-password link** to make a reader account. Open that link in a private window to
+   sign as the reader.
+
+To stop, press Ctrl+C in the first terminal. `docker compose down` removes the containers but keeps
+your data; `docker compose down -v` deletes the data too.
+
 ## What it does
 
 **Readers** (anyone asked to acknowledge a document)
@@ -68,7 +95,7 @@ Other choices worth knowing:
 - `Referrer-Policy: no-referrer` stops sign links leaking to other sites, and pages can't be framed.
 - CSV exports neutralise cells that a spreadsheet would run as formulas.
 
-## Running it
+## Running it without Docker
 
 Needs Node.js 20+ and PostgreSQL 13+.
 
@@ -92,6 +119,7 @@ document's sign link.
 | `DATABASE_URL` | PostgreSQL connection string |
 | `APP_URL` | Public base URL used in the sign and set-password links admins copy |
 | `APP_TIME_ZONE` | Optional. Time zone for displayed times and due dates (default `Europe/London`) |
+| `COOKIE_SECURE` | Optional. Set to `false` only for a plain-http local trial; secure cookies are on by default in production |
 
 ## Tests
 
