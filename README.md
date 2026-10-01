@@ -33,6 +33,11 @@ It runs the app and its database together; nothing else needs installing.
 To stop, press Ctrl+C in the first terminal. `docker compose down` removes the containers but keeps
 your data; `docker compose down -v` deletes the data too.
 
+## Clickable demo
+
+`demo/index.html` is a standalone, browser-only demo with sample data. It doesn't need the server or
+a database: open the file directly, or publish it with GitHub Pages. Changes stay in the viewer's browser.
+
 ## What it does
 
 **Readers** (anyone asked to acknowledge a document)

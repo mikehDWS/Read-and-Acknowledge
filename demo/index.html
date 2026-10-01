@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Read and Acknowledge Demo</title>
+<style>
+/* Layout: the real app's single 960px column, under a slim demo bar that switches who you are. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1f24;
+  --muted: #5b6572;
+  --border: #d6dae0;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --accent-hover: #184c99;
+  --ok-bg: #e5f4ea;
+  --ok-text: #155d2c;
+  --warn-bg: #fdf1dc;
+  --warn-text: #7a4b00;
+  --bad-bg: #fbe6e6;
+  --bad-text: #8f1d1d;
+  --demo-bg: #20304a;
+  --demo-text: #e9eef7;
+  --demo-chip: #34496b;
+  --focus: #f0b400;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171b; --surface: #1d2127; --text: #e8ebef; --muted: #a3acb8; --border: #353b44;
+    --accent: #6ea2f0; --accent-text: #0d1117; --accent-hover: #8db6f3;
+    --ok-bg: #173523; --ok-text: #9be0b0; --warn-bg: #3a2c12; --warn-text: #f2cd8a;
+    --bad-bg: #3d1c1c; --bad-text: #f3a9a9;
+    --demo-bg: #0c1626; --demo-text: #dfe7f3; --demo-chip: #22324d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171b; --surface: #1d2127; --text: #e8ebef; --muted: #a3acb8; --border: #353b44;
+  --accent: #6ea2f0; --accent-text: #0d1117; --accent-hover: #8db6f3;
+  --ok-bg: #173523; --ok-text: #9be0b0; --warn-bg: #3a2c12; --warn-text: #f2cd8a;
+  --bad-bg: #3d1c1c; --bad-text: #f3a9a9;
+  --demo-bg: #0c1626; --demo-text: #dfe7f3; --demo-chip: #22324d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font-ui); }
+a, .link { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.9em; }
+@media (prefers-reduced-motion: no-preference) { .fade { animation: fade 160ms ease-out; } }
+@keyframes fade { from { opacity: 0.4; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+.container { max-width: 960px; margin: 0 auto; padding-inline: 16px; }
+
+.demo-bar { background: var(--demo-bg); color: var(--demo-text); font-size: 0.9rem; }
+.demo-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 8px; }
+.demo-tag { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.75rem; background: var(--demo-chip); padding: 2px 8px; border-radius: 4px; }
+.demo-bar .grow { flex: 1 1 200px; min-width: 0; }
+.demo-bar label { display: inline; font-weight: 600; margin: 0 6px 0 0; }
+.demo-bar select { width: auto; padding: 4px 8px; font-size: 0.9rem; background: var(--demo-chip); color: var(--demo-text); border: 1px solid transparent; border-radius: 4px; }
+.demo-bar button { padding: 4px 10px; font-size: 0.85rem; background: transparent; color: var(--demo-text); border: 1px solid var(--demo-chip); }
+.demo-bar button:hover:not(:disabled) { background: var(--demo-chip); border-color: var(--demo-chip); }
+
+.site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
+.header-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding-block: 12px; }
+.brand { font-weight: 700; color: var(--text); text-decoration: none; background: none; border: 0; padding: 0; font-size: 1rem; cursor: pointer; }
+nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+nav .current { font-weight: 700; text-decoration: none; }
+.who { color: var(--muted); }
+
+main.container { padding-block: 24px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 8px; line-height: 1.25; text-wrap: balance; }
+h2 { font-size: 1.2rem; margin: 32px 0 12px; text-wrap: balance; }
+.lead { color: var(--muted); margin-top: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 16px 0; }
+.card > h2:first-child { margin-top: 0; }
+.narrow { max-width: 520px; margin-inline: auto; }
+.wide-narrow { max-width: 640px; margin-inline: auto; }
+
+label { display: block; font-weight: 600; margin: 16px 0 4px; }
+.hint { display: block; font-weight: 400; color: var(--muted); font-size: 0.9rem; }
+input[type="text"], input[type="email"], input[type="password"], input[type="url"], input[type="date"], input[type="search"], textarea, select {
+  width: 100%; padding: 10px 12px; font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+textarea { min-height: 120px; resize: vertical; }
+button, .button {
+  display: inline-block; padding: 10px 18px; font: inherit; font-weight: 600; border-radius: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; text-decoration: none;
+}
+button:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary { background: transparent; color: var(--accent); }
+button.secondary:hover:not(:disabled) { background: var(--bg); }
+button.danger { background: transparent; color: var(--bad-text); border-color: var(--bad-text); }
+button.link-button { background: none; border: none; color: var(--accent); padding: 0; font-weight: 400; text-decoration: underline; }
+button.link-button:hover:not(:disabled) { background: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 20px; }
+.title-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.title-row h1 { margin: 0; }
+
+.checkbox { display: flex; gap: 12px; align-items: flex-start; font-weight: 600; margin: 20px 0; cursor: pointer; }
+.checkbox input { width: 22px; height: 22px; margin-top: 2px; flex: none; }
+
+.notice { padding: 12px 16px; border-radius: 6px; margin: 16px 0; }
+.notice.ok { background: var(--ok-bg); color: var(--ok-text); }
+.notice.warn { background: var(--warn-bg); color: var(--warn-text); }
+.notice.bad { background: var(--bad-bg); color: var(--bad-text); }
+.notice ul { margin: 6px 0 0; padding-left: 20px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.badge.ok { background: var(--ok-bg); color: var(--ok-text); }
+.badge.warn { background: var(--warn-bg); color: var(--warn-text); }
+.badge.bad { background: var(--bad-bg); color: var(--bad-text); }
+.badge.muted { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+.row-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 12px; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; }
+.copy-row { display: flex; gap: 8px; }
+.copy-row input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.9rem; }
+.grid-2 { display: grid; gap: 0 16px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.progress { height: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-top: 6px; min-width: 80px; }
+.progress span { display: block; height: 100%; background: var(--ok-text); }
+
+.demo-accounts { display: grid; gap: 8px; }
+.demo-accounts button { text-align: left; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.csv { font-family: var(--font-mono); font-size: 0.8rem; white-space: pre; overflow-x: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 12px 0 0; max-height: 280px; }
+details summary { cursor: pointer; color: var(--accent); }
+details[open] summary { margin-bottom: 4px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 0.95rem; max-width: calc(100% - 32px); }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <div class="container demo-inner">
+    <span class="demo-tag">Demo</span>
+    <span class="grow">Sample data only. Changes stay in your browser and nobody else sees them.</span>
+    <span>
+      <label for="demo-as">View as</label>
+      <select id="demo-as"></select>
+    </span>
+    <button type="button" id="demo-reset">Reset demo</button>
+  </div>
+</div>
+<header class="site-header"><div class="container header-inner" id="header"></div></header>
+<main class="container" id="main"></main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- helpers ----------
+  const DAY = 86400000;
+  const STATEMENT = "I have read and understood this document.";
+  const BASE = "https://acknowledge.example.com";
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const tz = "Europe/London";
+  const fmtDateTime = (iso) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: tz }).format(new Date(iso));
+  const fmtDate = (ymd) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(ymd + "T00:00:00Z"));
+  const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  const isoPlusDays = (n) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+  const isOverdue = (due) => !!due && due < todayIso();
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const token = () => {
+    const a = new Uint8Array(32);
+    (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => (a[i] = Math.random() * 256));
+    return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+
+  // ---------- sample data ----------
+  function seed() {
+    const ago = (days, hours) => new Date(Date.now() - days * DAY - (hours || 0) * 3600000).toISOString();
+    const users = [
+      { id: "u-jo", name: "Jo Admin", email: "jo.admin@example.com", role: "admin", hasPassword: true, employeeId: "E1001" },
+      { id: "u-sam", name: "Sam Patel", email: "sam.patel@example.com", role: "reader", hasPassword: true, employeeId: "E1042" },
+      { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "" },
+      { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077" },
+      { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "" },
+      { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "" },
+    ];
+    const docs = [
+      { id: "d-infosec", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), signers: ["u-sam", "u-alex", "u-priya", "u-tom", "u-mia"] },
+      { id: "d-hs", name: "Health and Safety Procedures", description: "Site safety rules, PPE requirements and what to do in an emergency.", version: "2026.1", due: isoPlusDays(12), url: "https://intranet.example.com/policies/health-and-safety", status: "open", token: token(), signers: ["u-sam", "u-alex", "u-priya", "u-tom"] },
+      { id: "d-conduct", name: "Code of Conduct", description: "The standards of behaviour we expect from everyone.", version: "1.4", due: isoPlusDays(-5), url: "", status: "open", token: token(), signers: ["u-sam", "u-priya", "u-tom", "u-mia"] },
+      { id: "d-expenses", name: "Expenses Policy", description: "What you can claim and how.", version: "2025", due: isoPlusDays(-40), url: "", status: "closed", token: token(), signers: ["u-alex", "u-priya", "u-tom"] },
+    ];
+    const ack = (docId, userId, at, ip) => {
+      const d = docs.find((x) => x.id === docId), u = users.find((x) => x.id === userId);
+      return { id: uid(), docId, userId, name: u.name, email: u.email, docName: d.name, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
+    };
+    const acks = [
+      ack("d-infosec", "u-priya", ago(2, 3), "203.0.113.24"),
+      ack("d-infosec", "u-tom", ago(1, 6), "203.0.113.51"),
+      ack("d-hs", "u-alex", ago(4, 2), "198.51.100.7"),
+      ack("d-hs", "u-priya", ago(3, 5), "203.0.113.24"),
+      ack("d-hs", "u-tom", ago(3, 1), "203.0.113.51"),
+      ack("d-conduct", "u-priya", ago(9, 4), "203.0.113.24"),
+      ack("d-expenses", "u-alex", ago(60, 2), "198.51.100.7"),
+      ack("d-expenses", "u-priya", ago(58, 6), "203.0.113.24"),
+      ack("d-expenses", "u-tom", ago(57, 3), "203.0.113.51"),
+    ];
+    const voided = ack("d-conduct", "u-tom", ago(8, 2), "192.0.2.10");
+    Object.assign(voided, { voidedAt: ago(7, 5), voidedBy: "Jo Admin", voidReason: "Signed on a shared computer by a colleague" });
+    acks.push(voided);
+    return { users, docs, acks };
+  }
+
+  // ---------- state ----------
+  const KEY = "read-ack-demo-v1";
+  let data, ui;
+  function load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (saved && saved.data && saved.ui) { data = saved.data; ui = saved.ui; return; }
+    } catch (e) { /* storage unavailable: start fresh */ }
+    data = seed();
+    ui = { userId: "u-jo", view: "admin", docId: null, links: {}, csv: null };
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ data, ui })); } catch (e) { /* ignore */ }
+  }
+  const me = () => data.users.find((u) => u.id === ui.userId) || null;
+  const userById = (id) => data.users.find((u) => u.id === id);
+  const docById = (id) => data.docs.find((d) => d.id === id);
+  const liveAck = (docId, userId) => data.acks.find((a) => a.docId === docId && a.userId === userId && !a.voidedAt);
+  const signedCount = (d) => d.signers.filter((s) => liveAck(d.id, s)).length;
+
+  let flash = null; // one-off message for the next render
+  function go(view, extra) {
+    ui = Object.assign({}, ui, { view, csv: null }, extra || {});
+    save(); render(); window.scrollTo(0, 0);
+  }
+  let toastTimer;
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2400);
+  }
+
+  // ---------- people list parsing (same rules as the app) ----------
+  const EMAIL_RE = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/;
+  function parsePeople(input) {
+    const people = [], problems = [], seen = new Set();
+    let first = true;
+    input.split(/\r?\n/).forEach((raw, i) => {
+      const line = raw.trim(); if (!line) return;
+      const isFirst = first; first = false;
+      let name = "", email = "";
+      const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
+      if (angle) { name = angle[1].trim().replace(/^"|"$/g, "").trim(); email = angle[2].trim(); }
+      else {
+        const parts = line.split(/\t|,|;/).map((p) => p.trim().replace(/^"|"$/g, "").trim()).filter(Boolean);
+        const ei = parts.findIndex((p) => p.includes("@"));
+        if (ei === -1) {
+          if (isFirst && /e-?mail/i.test(line)) return;
+          problems.push({ line: i + 1, text: line, reason: "No email address found" }); return;
+        }
+        email = parts[ei]; name = parts.filter((_, j) => j !== ei).join(" ").trim();
+      }
+      email = email.toLowerCase();
+      if (!EMAIL_RE.test(email)) { problems.push({ line: i + 1, text: line, reason: "Email address doesn't look valid" }); return; }
+      if (!name) name = email.split("@")[0];
+      if (seen.has(email)) return; seen.add(email);
+      people.push({ name, email });
+    });
+    return { people, problems };
+  }
+  function upsertPeople(people) {
+    let created = 0;
+    const ids = people.map((p) => {
+      const found = data.users.find((u) => u.email.toLowerCase() === p.email);
+      if (found) return found.id;
+      const u = { id: "u-" + uid(), name: p.name, email: p.email, role: "reader", hasPassword: false, employeeId: "" };
+      data.users.push(u); created++; return u.id;
+    });
+    return { ids, created };
+  }
+
+  // ---------- CSV ----------
+  function csvCell(v) {
+    if (v === null || v === undefined) return "";
+    let t = String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    if (/[",\r\n]/.test(t)) t = '"' + t.replace(/"/g, '""') + '"';
+    return t;
+  }
+  function buildCsv(docId, from, to) {
+    const header = ["acknowledgement_id", "document", "version", "name", "email", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
+    const rows = data.acks
+      .filter((a) => (!docId || a.docId === docId) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .map((a) => [a.id, a.docName, a.version, a.name, a.email, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
+    return { text: [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), count: rows.length };
+  }
+
+  // ---------- views ----------
+  function header() {
+    const u = me();
+    const link = (view, label) => `<button type="button" class="link-button${ui.view === view ? " current" : ""}" data-go="${view}">${label}</button>`;
+    let nav = "";
+    if (u) {
+      nav = `<nav aria-label="Main">${link("my", "My documents")}${u.role === "admin" ? link("admin", "Documents") + link("people", "People") : ""}
+        <span class="who" title="${esc(u.email)}">${esc(u.name)}</span>
+        <button type="button" class="link-button" data-action="signout">Sign out</button></nav>`;
+    }
+    return `<button type="button" class="brand" data-go="home">Read and Acknowledge</button>${nav}`;
+  }
+
+  function badgeFor(d, userId) {
+    const a = liveAck(d.id, userId);
+    if (a) return `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>`;
+    if (d.status === "closed") return `<span class="badge muted">Closed</span>`;
+    if (isOverdue(d.due)) return `<span class="badge bad">Overdue</span>`;
+    return `<span class="badge warn">To sign</span>`;
+  }
+
+  function viewLogin() {
+    const accounts = data.users.filter((u) => u.hasPassword);
+    return `<div class="card narrow fade">
+      <h1>Sign in</h1>
+      <p class="lead">Sign in to see the documents you need to acknowledge.</p>
+      ${flash ? `<p class="notice bad" role="alert">${esc(flash)}</p>` : ""}
+      <form data-form="login" novalidate>
+        <label for="login-email">Email</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" required>
+        <label for="login-password">Password <span class="hint">In this demo, any password works.</span></label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <div class="actions"><button type="submit">Sign in</button></div>
+      </form>
+      <h2>Demo accounts</h2>
+      <div class="demo-accounts">
+        ${accounts.map((u) => `<button type="button" class="secondary" data-action="quick-login" data-id="${u.id}"><span>${esc(u.name)}</span><span class="hint">${u.role === "admin" ? "Admin" : "Reader"} · ${esc(u.email)}</span></button>`).join("")}
+      </div>
+      <p class="hint" style="margin-top:20px">In the real app, people without a password get a set-password link from their admin.</p>
+    </div>`;
+  }
+
+  function viewMy() {
+    const u = me();
+    const docs = data.docs.filter((d) => d.signers.includes(u.id))
+      .sort((a, b) => (!!liveAck(a.id, u.id) - !!liveAck(b.id, u.id)) || String(a.due || "9").localeCompare(String(b.due || "9")));
+    const outstanding = docs.filter((d) => !liveAck(d.id, u.id) && d.status === "open").length;
+    const lead = docs.length === 0 ? "You haven't been asked to acknowledge any documents yet."
+      : outstanding === 0 ? "You're up to date."
+      : `${outstanding} ${outstanding === 1 ? "document needs" : "documents need"} your acknowledgement.`;
+    return `<div class="fade"><h1>My documents</h1><p class="lead">${lead}</p>
+      ${docs.length ? `<div class="table-wrap"><table><thead><tr><th scope="col">Document</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead><tbody>
+      ${docs.map((d) => `<tr><td><button type="button" class="link-button" data-action="open-sign" data-token="${d.token}">${esc(d.name)}</button>${d.version ? `<span class="hint">Version ${esc(d.version)}</span>` : ""}</td>
+        <td>${d.due ? fmtDate(d.due) : "—"}</td><td>${badgeFor(d, u.id)}</td></tr>`).join("")}
+      </tbody></table></div>` : ""}
+      ${u.role === "admin" && docs.length === 0 ? `<p class="hint">Tip: switch to a reader with <strong>View as</strong> at the top to try signing.</p>` : ""}
+    </div>`;
+  }
+
+  function viewSign() {
+    const u = me();
+    const d = data.docs.find((x) => x.token === ui.token);
+    if (!d) return viewNotFound();
+    const a = liveAck(d.id, u.id);
+    const expected = d.signers.includes(u.id);
+    let body;
+    if (a) body = `<div class="notice ok" role="status"><strong>${ui.justSigned ? "Thank you. " : ""}You acknowledged this document on ${fmtDateTime(a.at)}.</strong></div>`;
+    else if (!expected) body = `<p class="notice warn">You're not on the list for this document. If you think you should be, contact your admin.</p>`;
+    else if (d.status === "closed") body = `<p class="notice warn">This document is no longer accepting acknowledgements.</p>`;
+    else body = `<form data-form="sign">
+        <label class="checkbox" for="agree"><input type="checkbox" id="agree" name="agree"><span>${STATEMENT}</span></label>
+        <button type="submit" id="confirm-btn" disabled aria-describedby="confirm-hint">Confirm</button>
+        <p id="confirm-hint" class="hint">Your name, the date and time are recorded when you confirm. You can't undo this yourself.</p>
+      </form>`;
+    return `<div class="card wide-narrow fade">
+      <h1>${esc(d.name)}</h1>
+      <dl class="meta">
+        ${d.version ? `<dt>Version</dt><dd>${esc(d.version)}</dd>` : ""}
+        ${d.due ? `<dt>Due</dt><dd>${fmtDate(d.due)}${!a && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</dd>` : ""}
+        <dt>Signing as</dt><dd>${esc(u.name)}</dd>
+      </dl>
+      ${d.description ? `<p style="white-space:pre-line">${esc(d.description)}</p>` : ""}
+      ${d.url ? `<p><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Open the document</a> <span class="hint">Opens in a new tab. Read it before you confirm. (Sample link in this demo.)</span></p>` : ""}
+      ${body}
+      <p style="margin-top:24px"><button type="button" class="link-button" data-go="my">Back to my documents</button></p>
+    </div>`;
+  }
+
+  function viewAdmin() {
+    const docs = data.docs.slice().sort((a, b) => (a.status === "closed") - (b.status === "closed") || String(a.due || "9").localeCompare(String(b.due || "9")));
+    const csv = ui.csv;
+    return `<div class="fade">
+      <div class="title-row"><h1>Documents</h1><button type="button" data-go="new">New document</button></div>
+      <div class="table-wrap" style="margin-top:16px"><table>
+        <thead><tr><th scope="col">Document</th><th scope="col">Due</th><th scope="col">Signed</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead>
+        <tbody>${docs.map((d) => {
+          const s = signedCount(d), n = d.signers.length, out = n - s, pct = n ? Math.round((s / n) * 100) : 0;
+          return `<tr><td><button type="button" class="link-button" data-action="open-doc" data-id="${d.id}">${esc(d.name)}</button>${d.version ? `<span class="hint">Version ${esc(d.version)}</span>` : ""}</td>
+            <td>${d.due ? fmtDate(d.due) : "—"}${out > 0 && d.status === "open" && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</td>
+            <td>${s} of ${n}<div class="progress" aria-hidden="true"><span style="width:${pct}%"></span></div></td>
+            <td>${out}</td>
+            <td><span class="badge ${d.status === "open" ? "ok" : "muted"}">${d.status === "open" ? "Open" : "Closed"}</span></td></tr>`;
+        }).join("")}</tbody></table></div>
+
+      <h2>Export acknowledgements</h2>
+      <form class="card" data-form="export">
+        <div class="grid-2">
+          <div><label for="exp-doc">Document</label><select id="exp-doc" name="doc"><option value="">All documents</option>${data.docs.map((d) => `<option value="${d.id}"${csv && csv.docId === d.id ? " selected" : ""}>${esc(d.name)}${d.version ? ` (${esc(d.version)})` : ""}</option>`).join("")}</select></div>
+          <div></div>
+          <div><label for="exp-from">Signed from</label><input id="exp-from" name="from" type="date" value="${csv ? esc(csv.from) : ""}"></div>
+          <div><label for="exp-to">Signed to</label><input id="exp-to" name="to" type="date" value="${csv ? esc(csv.to) : ""}"></div>
+        </div>
+        <div class="actions"><button type="submit">Show CSV</button><span class="hint">The real app downloads a .csv file. Here it's shown below to copy. Includes voided records.</span></div>
+        ${csv ? csvBlock(csv) : ""}
+      </form></div>`;
+  }
+
+  function csvBlock(csv) {
+    const built = buildCsv(csv.docId, csv.from, csv.to);
+    return `<p class="hint" style="margin-top:16px">${built.count} ${built.count === 1 ? "record" : "records"}.</p>
+      <pre class="csv" id="csv-text">${esc(built.text)}</pre>
+      <div class="actions"><button type="button" class="secondary" data-action="copy" data-target="csv-text">Copy CSV</button></div>`;
+  }
+
+  function viewNew() {
+    return `<div class="fade"><p><button type="button" class="link-button" data-go="admin">← Documents</button></p>
+      <h1>New document</h1>
+      <p class="lead">Record the document by name. Readers read it wherever it's held today; you'll add the people who need to sign it next.</p>
+      <div class="card">${documentForm(null)}</div></div>`;
+  }
+
+  function documentForm(d) {
+    const p = d ? "edit" : "new";
+    return `<form data-form="${d ? "doc-edit" : "doc-new"}">
+      ${flash && flash.form === p ? `<p class="notice ${flash.ok ? "ok" : "bad"}" role="${flash.ok ? "status" : "alert"}">${esc(flash.text)}</p>` : ""}
+      <label for="${p}-name">Document name</label>
+      <input id="${p}-name" name="name" type="text" required maxlength="200" value="${esc(d ? d.name : "")}">
+      <label for="${p}-desc">Description <span class="hint">Optional. Shown to readers on the sign page.</span></label>
+      <textarea id="${p}-desc" name="description" maxlength="4000">${esc(d ? d.description : "")}</textarea>
+      <div class="grid-2">
+        <div><label for="${p}-version">Version <span class="hint">Optional, e.g. 2.1 or March 2026</span></label>
+          <input id="${p}-version" name="version" type="text" maxlength="100" value="${esc(d ? d.version : "")}"></div>
+        <div><label for="${p}-due">Due date <span class="hint">Optional</span></label>
+          <input id="${p}-due" name="due" type="date" value="${esc(d ? d.due : "")}"></div>
+      </div>
+      <label for="${p}-url">Where the document is held <span class="hint">Optional web link, e.g. an intranet page</span></label>
+      <input id="${p}-url" name="url" type="url" placeholder="https://" value="${esc(d ? d.url : "")}">
+      <div class="actions"><button type="submit">${d ? "Save changes" : "Create document"}</button></div>
+    </form>`;
+  }
+
+  function addPeopleForm(scope) {
+    const f = flash && flash.form === "people-" + scope ? flash : null;
+    return `<form data-form="add-people" data-scope="${scope}">
+      <label for="people-${scope}">People <span class="hint">One per line: <code>Name, email</code>. You can paste two columns (name and email) straight from a spreadsheet. New email addresses get a reader account.</span></label>
+      <textarea id="people-${scope}" name="people" placeholder="Lee Brown, lee.brown@example.com&#10;Ana Silva, ana.silva@example.com">${f && f.keep ? esc(f.keep) : ""}</textarea>
+      ${f && f.error ? `<p class="notice bad" role="alert">${esc(f.error)}</p>` : ""}
+      ${f && f.summary ? `<p class="notice ok" role="status">${esc(f.summary)}</p>` : ""}
+      ${f && f.problems && f.problems.length ? `<div class="notice warn" role="alert">These lines were skipped:<ul>${f.problems.map((p) => `<li>Line ${p.line}: <code>${esc(p.text)}</code> (${esc(p.reason)})</li>`).join("")}</ul></div>` : ""}
+      <div class="actions"><button type="submit">${scope === "all" ? "Add people" : "Add to this document"}</button>
+        <button type="button" class="link-button" data-action="sample-people" data-target="people-${scope}">Fill in a sample list</button></div>
+    </form>`;
+  }
+
+  function linkCell(u) {
+    const t = ui.links[u.id];
+    if (t) {
+      return `<div><div class="copy-row"><input type="text" readonly value="${BASE}/account/${t}" aria-label="Set-password link for ${esc(u.name)}" id="link-${u.id}">
+        <button type="button" class="secondary" data-action="copy" data-target="link-${u.id}">Copy</button></div>
+        <span class="hint">Works once and expires in 7 days. <button type="button" class="link-button" data-action="open-account" data-id="${u.id}">Open it as ${esc(u.name)}</button> to see what they'll see.</span></div>`;
+    }
+    return `<button type="button" class="secondary" data-action="make-link" data-id="${u.id}">${u.hasPassword ? "Create reset link" : "Create set-password link"}</button>`;
+  }
+
+  function viewDoc() {
+    const d = docById(ui.docId);
+    if (!d) return viewNotFound();
+    const s = signedCount(d), n = d.signers.length;
+    const overdue = isOverdue(d.due);
+    const signers = d.signers.map(userById).filter(Boolean)
+      .sort((a, b) => (!!liveAck(d.id, a.id) - !!liveAck(d.id, b.id)) || a.name.localeCompare(b.name));
+    const acks = data.acks.filter((a) => a.docId === d.id).sort((a, b) => b.at.localeCompare(a.at));
+    const link = `${BASE}/sign/${d.token}`;
+    return `<div class="fade">
+      <p><button type="button" class="link-button" data-go="admin">← Documents</button></p>
+      <h1>${esc(d.name)} <span class="badge ${d.status === "open" ? "ok" : "muted"}">${d.status === "open" ? "Open" : "Closed"}</span></h1>
+      <p class="lead">${s} of ${n} signed${d.version ? ` · Version ${esc(d.version)}` : ""}${d.due ? ` · Due ${fmtDate(d.due)}` : ""}${overdue && s < n ? " · Overdue" : ""}</p>
+
+      <section class="card" aria-labelledby="share-h">
+        <h2 id="share-h">Share link</h2>
+        <p class="hint">Send this link to the people below by email, chat or intranet. They sign in, tick the box and confirm. Only people on this document's list can sign.</p>
+        <div class="copy-row"><input type="text" readonly id="sign-link" value="${link}" aria-label="Sign link"><button type="button" class="secondary" data-action="copy" data-target="sign-link">Copy</button></div>
+        <div class="actions">
+          <button type="button" class="secondary" data-action="toggle-status" data-id="${d.id}">${d.status === "open" ? "Close link (stop accepting signatures)" : "Reopen link"}</button>
+          <span class="hint">To try signing, switch to a reader with <strong>View as</strong> at the top.</span>
+        </div>
+      </section>
+
+      <h2>People expected to sign (${n})</h2>
+      ${n === 0 ? `<p>No one yet. Add people below.</p>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>${signers.map((u) => {
+          const a = liveAck(d.id, u.id);
+          return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span></td>
+            <td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : overdue ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Outstanding</span>`}
+              ${!u.hasPassword ? `<div class="row-actions" style="margin-top:6px"><span class="badge muted">No password set yet</span>${linkCell(u)}</div>` : ""}</td>
+            <td><button type="button" class="link-button" data-action="remove-signer" data-id="${u.id}" aria-label="Remove ${esc(u.name)} from this document">Remove</button></td></tr>`;
+        }).join("")}</tbody></table></div>`}
+
+      <section class="card" aria-labelledby="add-h"><h2 id="add-h">Add people</h2>${addPeopleForm("doc")}</section>
+
+      <h2>Acknowledgement records (${acks.length})</h2>
+      ${acks.length === 0 ? `<p>No acknowledgements yet.</p>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Signed</th><th scope="col">Version</th><th scope="col">IP address</th><th scope="col">Record</th></tr></thead>
+        <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}<span class="hint">${esc(a.email)}</span></td>
+          <td>${fmtDateTime(a.at)}</td><td>${esc(a.version || "—")}</td><td>${esc(a.ip || "—")}</td>
+          <td>${a.voidedAt ? `<span class="badge muted">Voided</span><span class="hint">${fmtDateTime(a.voidedAt)} by ${esc(a.voidedBy)}: ${esc(a.voidReason)}</span>`
+            : `<details><summary>Void</summary><form data-form="void" data-id="${a.id}">
+                <label for="reason-${a.id}">Reason <span class="hint">Kept in the record. ${esc(a.name)} will be able to sign again.</span></label>
+                <input id="reason-${a.id}" name="reason" type="text" required maxlength="1000">
+                ${flash && flash.form === "void-" + a.id ? `<p class="notice bad" role="alert">${esc(flash.text)}</p>` : ""}
+                <div class="actions"><button type="submit" class="danger">Void acknowledgement</button></div></form></details>`}</td></tr>`).join("")}
+        </tbody></table></div>`}
+      <p class="hint">Records can't be edited or deleted. Voiding keeps the record and the reason.</p>
+
+      <h2>Document details</h2>
+      <div class="card">${documentForm(d)}<p class="hint">Past acknowledgements keep the name and version they were signed under.</p></div>
+    </div>`;
+  }
+
+  function viewPeople() {
+    const q = (ui.q || "").toLowerCase();
+    const list = data.users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const admin = me();
+    return `<div class="fade"><h1>People</h1>
+      <p class="lead">Everyone who signs in: readers and admins. New people need a set-password link before they can sign in. v1 doesn't send email, so copy the link and share it yourself.</p>
+      <form class="copy-row" data-form="search" role="search" style="margin:16px 0">
+        <label for="q" class="visually-hidden">Search people</label>
+        <input id="q" name="q" type="search" placeholder="Search by name or email" value="${esc(ui.q || "")}">
+        <button type="submit" class="secondary">Search</button>
+      </form>
+      ${list.length === 0 ? `<p>No people found.</p>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Account</th><th scope="col">Role</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>${list.map((u) => {
+          const docs = data.docs.filter((d) => d.signers.includes(u.id)).length;
+          return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span>${u.employeeId ? `<span class="hint">ID ${esc(u.employeeId)}</span>` : ""}<span class="hint">${docs} ${docs === 1 ? "document" : "documents"}</span></td>
+            <td>${u.hasPassword ? `<span class="badge ok">Active</span>` : `<span class="badge muted">No password set</span>`}<div style="margin-top:6px">${linkCell(u)}</div></td>
+            <td>${u.role === "admin" ? "Admin" : "Reader"}${u.id !== admin.id ? `<br><button type="button" class="link-button" data-action="toggle-role" data-id="${u.id}">${u.role === "admin" ? "Remove admin" : "Make admin"}</button>` : ""}</td>
+            <td><details><summary>Edit</summary><form data-form="person" data-id="${u.id}">
+              <label for="pn-${u.id}">Name</label><input id="pn-${u.id}" name="name" type="text" required value="${esc(u.name)}">
+              <label for="pe-${u.id}">Email</label><input id="pe-${u.id}" name="email" type="email" required value="${esc(u.email)}">
+              <label for="pi-${u.id}">Employee ID <span class="hint">Optional. Never shown to other readers.</span></label><input id="pi-${u.id}" name="employeeId" type="text" value="${esc(u.employeeId)}">
+              ${flash && flash.form === "person-" + u.id ? `<p class="notice ${flash.ok ? "ok" : "bad"}">${esc(flash.text)}</p>` : ""}
+              <div class="actions"><button type="submit">Save</button></div></form></details></td></tr>`;
+        }).join("")}</tbody></table></div>`}
+      <section class="card" aria-labelledby="addp-h" style="margin-top:24px"><h2 id="addp-h">Add people</h2>${addPeopleForm("all")}</section>
+    </div>`;
+  }
+
+  function viewAccount() {
+    const u = userById(ui.accountFor);
+    if (!u) return viewNotFound();
+    const f = flash && flash.form === "account" ? flash : null;
+    return `<div class="card narrow fade">
+      <h1>${u.hasPassword ? "Reset your password" : "Set up your account"}</h1>
+      <p class="lead">${esc(u.name)} (${esc(u.email)})</p>
+      <p class="hint">This is the page ${esc(u.name)} sees when they open the link you shared.</p>
+      <form data-form="account">
+        ${f ? `<p class="notice bad" role="alert">${esc(f.text)}</p>` : ""}
+        <label for="np">New password <span class="hint">At least 12 characters. A short phrase is easy to remember.</span></label>
+        <input id="np" name="password" type="password" autocomplete="new-password" required>
+        <label for="np2">Type it again</label>
+        <input id="np2" name="confirm" type="password" autocomplete="new-password" required>
+        <div class="actions"><button type="submit">Set password and sign in</button></div>
+      </form>
+    </div>`;
+  }
+
+  function viewNotFound() {
+    return `<div class="card narrow"><h1>Page not found</h1><p>Check the link you were sent.</p><p><button type="button" class="link-button" data-go="home">Go to the home page</button></p></div>`;
+  }
+
+  // ---------- render ----------
+  function render() {
+    const u = me();
+    if (!u && ui.view !== "login" && ui.view !== "account") ui.view = "login";
+    if (u && u.role !== "admin" && ["admin", "doc", "new", "people"].includes(ui.view)) ui.view = "my";
+    const views = { login: viewLogin, my: viewMy, sign: viewSign, admin: viewAdmin, doc: viewDoc, new: viewNew, people: viewPeople, account: viewAccount };
+    document.getElementById("header").innerHTML = header();
+    document.getElementById("main").innerHTML = (views[ui.view] || viewNotFound)();
+    const sel = document.getElementById("demo-as");
+    sel.innerHTML = `<option value="">Signed out</option>` + data.users.filter((x) => x.hasPassword)
+      .map((x) => `<option value="${x.id}"${x.id === ui.userId ? " selected" : ""}>${esc(x.name)} (${x.role === "admin" ? "admin" : "reader"})</option>`).join("");
+    if (!u) sel.value = "";
+    const t = { login: "Sign in", my: "My documents", sign: "Acknowledge a document", admin: "Documents", doc: "Document", new: "New document", people: "People", account: "Set your password" }[ui.view];
+    document.title = (t ? t + " · " : "") + "Read and Acknowledge Demo";
+    flash = null;
+  }
+
+  function signInAs(id, view) {
+    const u = userById(id);
+    ui = Object.assign({}, ui, { userId: id, view: view || (u.role === "admin" ? "admin" : "my"), csv: null, justSigned: false });
+    save(); render(); window.scrollTo(0, 0);
+  }
+
+  // ---------- events ----------
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-go], [data-action]");
+    if (!el) return;
+    const goTo = el.getAttribute("data-go");
+    if (goTo) {
+      const u = me();
+      if (goTo === "home") return go(!u ? "login" : u.role === "admin" ? "admin" : "my");
+      return go(goTo);
+    }
+    const id = el.getAttribute("data-id");
+    switch (el.getAttribute("data-action")) {
+      case "signout": ui.userId = null; return go("login");
+      case "quick-login": return signInAs(id);
+      case "open-sign": return go("sign", { token: el.getAttribute("data-token"), justSigned: false });
+      case "open-doc": return go("doc", { docId: id });
+      case "toggle-status": {
+        const d = docById(id); d.status = d.status === "open" ? "closed" : "open";
+        save(); render(); return toast(d.status === "closed" ? "Link closed. No more signatures accepted." : "Link reopened.");
+      }
+      case "remove-signer": {
+        const d = docById(ui.docId); d.signers = d.signers.filter((s) => s !== id);
+        save(); render(); return toast(`Removed ${userById(id).name} from this document.`);
+      }
+      case "make-link": ui.links[id] = token(); save(); render(); return toast("Link created. Copy it and share it.");
+      case "open-account": delete ui.links[id]; return go("account", { accountFor: id, userId: null });
+      case "toggle-role": {
+        const u = userById(id); u.role = u.role === "admin" ? "reader" : "admin";
+        save(); render(); return toast(`${u.name} is now ${u.role === "admin" ? "an admin" : "a reader"}.`);
+      }
+      case "sample-people": {
+        const ta = document.getElementById(el.getAttribute("data-target"));
+        ta.value = "Name\tEmail\nLee Brown\tlee.brown@example.com\nAna Silva\tana.silva@example.com\nSam Patel\tsam.patel@example.com\nnot an email";
+        return ta.focus();
+      }
+      case "copy": {
+        const target = document.getElementById(el.getAttribute("data-target"));
+        const text = "value" in target ? target.value : target.textContent;
+        const done = () => toast("Copied.");
+        const fallback = () => {
+          if ("select" in target) target.select();
+          else { const r = document.createRange(); r.selectNodeContents(target); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+          toast("Selected. Press Ctrl+C (or Cmd+C) to copy.");
+        };
+        try { navigator.clipboard.writeText(text).then(done, fallback); } catch (err) { fallback(); }
+        return;
+      }
+    }
+  });
+
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "agree") document.getElementById("confirm-btn").disabled = !e.target.checked;
+    if (e.target.id === "demo-as") {
+      const v = e.target.value;
+      if (!v) { ui.userId = null; return go("login"); }
+      const keepSign = ui.view === "sign";
+      signInAs(v, keepSign ? "sign" : undefined);
+    }
+  });
+
+  document.getElementById("demo-reset").addEventListener("click", () => {
+    try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    load(); render(); toast("Demo reset to the sample data.");
+  });
+
+  document.addEventListener("submit", (e) => {
+    const form = e.target.closest("form[data-form]");
+    if (!form) return;
+    e.preventDefault();
+    const f = new FormData(form);
+    const val = (k) => String(f.get(k) || "").trim();
+    const kind = form.getAttribute("data-form");
+
+    if (kind === "login") {
+      const email = val("email").toLowerCase();
+      const u = data.users.find((x) => x.email.toLowerCase() === email);
+      if (!email || !val("password")) { flash = "Enter your email and password."; return render(); }
+      if (!u || !u.hasPassword) { flash = "That email and password don't match an account."; return render(); }
+      return signInAs(u.id);
+    }
+    if (kind === "sign") {
+      if (!f.get("agree")) return;
+      const u = me(), d = data.docs.find((x) => x.token === ui.token);
+      if (!liveAck(d.id, u.id)) {
+        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, docName: d.name, version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
+      }
+      return go("sign", { justSigned: true });
+    }
+    if (kind === "doc-new" || kind === "doc-edit") {
+      const name = val("name"), url = val("url");
+      const formKey = kind === "doc-new" ? "new" : "edit";
+      if (!name) { flash = { form: formKey, text: "Give the document a name." }; return render(); }
+      if (url && !/^https?:\/\/\S+$/i.test(url)) { flash = { form: formKey, text: "The document location must be a web address starting with http:// or https://." }; return render(); }
+      const fields = { name, description: val("description"), version: val("version"), due: val("due"), url };
+      if (kind === "doc-new") {
+        const d = Object.assign({ id: "d-" + uid(), status: "open", token: token(), signers: [] }, fields);
+        data.docs.push(d); return go("doc", { docId: d.id });
+      }
+      Object.assign(docById(ui.docId), fields);
+      flash = { form: "edit", ok: true, text: "Changes saved." }; save(); return render();
+    }
+    if (kind === "add-people") {
+      const scope = form.getAttribute("data-scope");
+      const raw = String(f.get("people") || "");
+      const { people, problems } = parsePeople(raw);
+      if (!people.length) { flash = { form: "people-" + scope, error: problems.length ? "No valid lines found." : "Add at least one person.", problems, keep: raw }; return render(); }
+      const { ids, created } = upsertPeople(people);
+      let summary;
+      if (scope === "doc") {
+        const d = docById(ui.docId);
+        const fresh = ids.filter((x) => !d.signers.includes(x));
+        d.signers.push(...fresh);
+        const already = ids.length - fresh.length;
+        summary = `Added ${fresh.length} to this document${already ? `; ${already} ${already === 1 ? "was" : "were"} already on the list` : ""}. ${created} new ${created === 1 ? "account" : "accounts"} created.`;
+      } else {
+        summary = `${created} new ${created === 1 ? "account" : "accounts"} created${ids.length - created ? `; ${ids.length - created} already had accounts` : ""}.`;
+      }
+      if (created) summary += " New people need a set-password link before they can sign in.";
+      flash = { form: "people-" + scope, summary, problems }; save(); return render();
+    }
+    if (kind === "void") {
+      const reason = val("reason"), a = data.acks.find((x) => x.id === form.getAttribute("data-id"));
+      if (!reason) { flash = { form: "void-" + a.id, text: "Give a reason for voiding." }; return render(); }
+      Object.assign(a, { voidedAt: new Date().toISOString(), voidedBy: me().name, voidReason: reason });
+      save(); render(); return toast(`Voided. ${a.name} can sign again.`);
+    }
+    if (kind === "export") {
+      ui.csv = { docId: val("doc"), from: val("from"), to: val("to") };
+      save(); render();
+      const pre = document.getElementById("csv-text"); if (pre) pre.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    if (kind === "search") { ui.q = val("q"); save(); return render(); }
+    if (kind === "person") {
+      const u = userById(form.getAttribute("data-id")), email = val("email").toLowerCase();
+      if (!val("name")) { flash = { form: "person-" + u.id, text: "Enter a name." }; return render(); }
+      if (!EMAIL_RE.test(email)) { flash = { form: "person-" + u.id, text: "Enter a valid email address." }; return render(); }
+      if (data.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email)) { flash = { form: "person-" + u.id, text: "Someone else already uses that email address." }; return render(); }
+      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId") });
+      save(); render(); return toast("Saved.");
+    }
+    if (kind === "account") {
+      const p = String(f.get("password") || ""), c = String(f.get("confirm") || "");
+      const problem = p.length < 12 ? "Use at least 12 characters." : p !== c ? "The two passwords don't match." : null;
+      if (problem) { flash = { form: "account", text: problem }; return render(); }
+      const u = userById(ui.accountFor); u.hasPassword = true;
+      return signInAs(u.id);
+    }
+  });
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
