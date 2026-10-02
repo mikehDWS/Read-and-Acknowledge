@@ -8,6 +8,9 @@ This folder holds everything needed to build it in your own tenant: a script tha
 SharePoint lists, step-by-step instructions for two Power Automate flows, and a screen-by-screen guide
 with every Power Fx formula. Building it takes about two hours.
 
+**Try it first:** `demo/index.html` is a clickable demo with sample data. Open it in a browser (no
+setup needed). A side panel shows each flow run and what's written to the SharePoint records list.
+
 ## How it differs from the web app
 
 | | Web app (Next.js) | Power App |

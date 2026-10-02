@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Read and Acknowledge Power App Demo</title>
+<style>
+/* Layout: a tablet-shaped canvas app on the left, a "behind the scenes" panel on the right that stacks below on narrow screens. */
+:root {
+  --page: #eef1f5;
+  --app-bg: #f7f8fa;
+  --surface: #ffffff;
+  --text: #1c2028;
+  --muted: #5d6675;
+  --line: #d9dde4;
+  --brand: #3b2f8f;          /* the app's header colour */
+  --brand-text: #ffffff;
+  --accent: #4b3fb5;
+  --accent-text: #ffffff;
+  --accent-soft: #ecebfa;
+  --ok: #155d2c; --ok-bg: #e4f3e9;
+  --warn: #7a4b00; --warn-bg: #fdf1dc;
+  --bad: #8f1d1d; --bad-bg: #fbe6e6;
+  --code-bg: #f1f2f6;
+  --demo-bg: #1f2533; --demo-text: #e7eaf1; --demo-chip: #353d52;
+  --focus: #f0b400;
+  --font: "Segoe UI", "Noto Sans", system-ui, -apple-system, Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #101318; --app-bg: #171a21; --surface: #20242d; --text: #e7e9ee; --muted: #a2a9b6; --line: #343a46;
+    --brand: #2c2470; --brand-text: #f2f0ff; --accent: #9d93f0; --accent-text: #15122d; --accent-soft: #2a2650;
+    --ok: #9be0b0; --ok-bg: #173523; --warn: #f2cd8a; --warn-bg: #3a2c12; --bad: #f3a9a9; --bad-bg: #3d1c1c;
+    --code-bg: #262a35; --demo-bg: #0b0f18; --demo-text: #dfe3ec; --demo-chip: #252c3d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #101318; --app-bg: #171a21; --surface: #20242d; --text: #e7e9ee; --muted: #a2a9b6; --line: #343a46;
+  --brand: #2c2470; --brand-text: #f2f0ff; --accent: #9d93f0; --accent-text: #15122d; --accent-soft: #2a2650;
+  --ok: #9be0b0; --ok-bg: #173523; --warn: #f2cd8a; --warn-bg: #3a2c12; --bad: #f3a9a9; --bad-bg: #3d1c1c;
+  --code-bg: #262a35; --demo-bg: #0b0f18; --demo-text: #dfe3ec; --demo-chip: #252c3d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text); font: 15px/1.45 var(--font); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.85em; }
+
+.demo-bar { background: var(--demo-bg); color: var(--demo-text); font-size: 0.88rem; }
+.demo-inner { max-width: 1240px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.demo-tag { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.72rem; background: var(--demo-chip); padding: 2px 8px; border-radius: 4px; }
+.demo-inner .grow { flex: 1 1 220px; min-width: 0; }
+.demo-inner label { font-weight: 600; margin-right: 6px; }
+.demo-inner select { font: inherit; padding: 4px 8px; background: var(--demo-chip); color: var(--demo-text); border: 0; border-radius: 4px; }
+.demo-inner button { font: inherit; padding: 4px 10px; background: transparent; color: var(--demo-text); border: 1px solid var(--demo-chip); border-radius: 4px; cursor: pointer; }
+
+.layout { max-width: 1240px; margin: 0 auto; padding: 20px 16px 40px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* The canvas app frame */
+.device { background: var(--app-bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 8px 24px rgba(20, 24, 40, 0.08); min-height: 640px; display: flex; flex-direction: column; }
+.appbar { background: var(--brand); color: var(--brand-text); display: flex; align-items: center; gap: 12px; padding: 12px 18px; flex-wrap: wrap; }
+.appbar .app-name { font-weight: 700; font-size: 1.05rem; flex: 1 1 auto; }
+.appbar .me { font-size: 0.88rem; opacity: 0.9; display: flex; align-items: center; gap: 8px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.2); display: grid; place-items: center; font-weight: 700; font-size: 0.75rem; }
+.appbar button { font: inherit; font-size: 0.88rem; color: var(--brand-text); background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); padding: 5px 12px; border-radius: 4px; cursor: pointer; }
+.screen { padding: 22px; flex: 1; }
+.screen-name { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin: 0 0 6px; }
+
+h1 { font-size: 1.45rem; margin: 0 0 4px; line-height: 1.25; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0 0 10px; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+.section { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.between { justify-content: space-between; }
+
+.btn { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn.small { padding: 4px 10px; font-size: 0.88rem; }
+.btn.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+.back { font: inherit; background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; margin-bottom: 10px; }
+
+/* Galleries */
+.gallery { display: grid; gap: 8px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; text-align: left; font: inherit; color: inherit; width: 100%; }
+button.item { cursor: pointer; }
+button.item:hover { border-color: var(--accent); }
+.item .title { font-weight: 600; }
+.item .detail { color: var(--muted); font-size: 0.88rem; grid-column: 1; }
+.chev { color: var(--muted); grid-row: 1 / span 2; grid-column: 3; }
+.status { font-weight: 600; font-size: 0.85rem; padding: 2px 10px; border-radius: 999px; white-space: nowrap; grid-row: 1 / span 2; grid-column: 2; }
+.s-ok { background: var(--ok-bg); color: var(--ok); }
+.s-warn { background: var(--warn-bg); color: var(--warn); }
+.s-bad { background: var(--bad-bg); color: var(--bad); }
+.s-muted { background: var(--code-bg); color: var(--muted); }
+.track { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; max-width: 220px; }
+.track span { display: block; height: 100%; background: var(--ok); }
+
+.message { padding: 12px 14px; border-radius: 6px; margin: 14px 0; }
+.meta { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 10px 0 14px; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; }
+.check { display: flex; gap: 10px; align-items: center; font-weight: 600; margin: 16px 0; cursor: pointer; }
+.check input { width: 20px; height: 20px; }
+.hint { color: var(--muted); font-size: 0.86rem; }
+
+label.f { display: block; font-weight: 600; margin: 12px 0 4px; }
+input[type="text"], input[type="date"], input[type="url"], textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--text); }
+textarea { min-height: 96px; resize: vertical; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+@media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } .screen { padding: 16px; } }
+.copy { display: flex; gap: 8px; }
+.copy input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.82rem; }
+.results { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 0.88rem; }
+.results li { padding: 6px 10px; border-radius: 4px; background: var(--code-bg); }
+.icon-btn { font: inherit; background: none; border: 0; color: var(--bad); cursor: pointer; padding: 4px; grid-row: 1 / span 2; grid-column: 3; }
+.void-row { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 6px; }
+.void-row input { flex: 1; min-width: 0; }
+
+/* Behind the scenes */
+.side { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); display: grid; gap: 14px; min-width: 0; }
+@media (max-width: 1000px) { .side { position: static; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.panel h2 { font-size: 0.95rem; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.panel .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+.runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 300px; overflow: auto; }
+.run { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; font-size: 0.85rem; }
+.run.ok { border-color: var(--ok); }
+.run.no { border-color: var(--warn); }
+.run .name { font-weight: 700; font-family: var(--mono); font-size: 0.8rem; }
+.run .steps { color: var(--muted); margin: 2px 0 0; padding-left: 16px; }
+.empty { color: var(--muted); font-size: 0.88rem; margin: 0; }
+.table-wrap { overflow-x: auto; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { background: var(--code-bg); color: var(--muted); font-weight: 600; position: sticky; top: 0; }
+tr.voided td { color: var(--muted); text-decoration: line-through; }
+.perm { font-size: 0.82rem; color: var(--muted); margin: 8px 0 0; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--text); color: var(--page); padding: 10px 16px; border-radius: 6px; max-width: calc(100% - 32px); font-size: 0.92rem; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -2px; margin-right: 6px; }
+@media (prefers-reduced-motion: no-preference) { .spinner { animation: spin 0.8s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <div class="demo-inner">
+    <span class="demo-tag">Demo</span>
+    <span class="grow">Power Apps version with sample data. Everyone is "signed in" with their Microsoft 365 account, so pick who you are.</span>
+    <span><label for="as">Signed in as</label><select id="as"></select></span>
+    <button type="button" id="reset">Reset demo</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="device" aria-label="The app">
+    <div class="appbar" id="appbar"></div>
+    <div class="screen" id="screen"></div>
+  </div>
+  <aside class="side" aria-label="Behind the scenes">
+    <section class="panel">
+      <h2><span>Power Automate flow runs</span><span class="kicker">Behind the scenes</span></h2>
+      <ul class="runs" id="runs"></ul>
+    </section>
+    <section class="panel">
+      <h2><span>SharePoint: RA Acknowledgements</span><span class="kicker">List</span></h2>
+      <div class="table-wrap" id="acks"></div>
+      <p class="perm">Everyone can read this list. Only the flow account can add or change rows, and version history keeps every change.</p>
+    </section>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const DAY = 86400000;
+  const STATEMENT = "I have read and understood this document.";
+  const APP_LINK = "https://apps.powerapps.com/play/e/demo-env/a/read-and-acknowledge?tenantId=demo-tenant";
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const tz = "Europe/London";
+  const fmtDT = (iso) => new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: tz }).format(new Date(iso));
+  const fmtTime = (iso) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: tz }).format(new Date(iso));
+  const fmtD = (ymd) => new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(ymd + "T00:00:00Z"));
+  const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  const plusDays = (n) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+  const overdue = (due) => !!due && due < today();
+  const initials = (n) => n.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+
+  // Microsoft 365 directory (sample). Admins are listed in RA Admins.
+  const DIRECTORY = [
+    { email: "jo.admin@example.com", name: "Jo Admin" },
+    { email: "sam.patel@example.com", name: "Sam Patel" },
+    { email: "alex.jones@example.com", name: "Alex Jones" },
+    { email: "priya.shah@example.com", name: "Priya Shah" },
+    { email: "tom.evans@example.com", name: "Tom Evans" },
+    { email: "mia.clarke@example.com", name: "Mia Clarke" },
+    { email: "lee.brown@example.com", name: "Lee Brown" },
+    { email: "ana.silva@example.com", name: "Ana Silva" },
+  ];
+  const dirName = (email) => (DIRECTORY.find((d) => d.email === email) || {}).name;
+
+  function seed() {
+    const ago = (d, h) => new Date(Date.now() - d * DAY - (h || 0) * 3600000).toISOString();
+    const docs = [
+      { ID: 1, Title: "Information Security Policy", Description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", VersionLabel: "3.0", DueDate: plusDays(30), DocumentLink: "https://intranet.example.com/policies/infosec", Status: "Open" },
+      { ID: 2, Title: "Health and Safety Procedures", Description: "Site safety rules, PPE requirements and what to do in an emergency.", VersionLabel: "2026.1", DueDate: plusDays(12), DocumentLink: "https://intranet.example.com/policies/health-and-safety", Status: "Open" },
+      { ID: 3, Title: "Code of Conduct", Description: "The standards of behaviour we expect from everyone.", VersionLabel: "1.4", DueDate: plusDays(-5), DocumentLink: "", Status: "Open" },
+      { ID: 4, Title: "Expenses Policy", Description: "What you can claim and how.", VersionLabel: "2025", DueDate: plusDays(-40), DocumentLink: "", Status: "Closed" },
+    ];
+    let sid = 1;
+    const signer = (doc, email) => ({ ID: sid++, Title: dirName(email), DocumentId: doc, SignerEmail: email });
+    const signers = [
+      ...["sam.patel", "alex.jones", "priya.shah", "tom.evans", "mia.clarke"].map((u) => signer(1, u + "@example.com")),
+      ...["sam.patel", "alex.jones", "priya.shah", "tom.evans"].map((u) => signer(2, u + "@example.com")),
+      ...["sam.patel", "priya.shah", "tom.evans", "mia.clarke"].map((u) => signer(3, u + "@example.com")),
+      ...["alex.jones", "priya.shah", "tom.evans"].map((u) => signer(4, u + "@example.com")),
+    ];
+    let aid = 1;
+    const ack = (doc, email, at) => {
+      const d = docs.find((x) => x.ID === doc);
+      return { ID: aid++, Title: dirName(email), SignerEmail: email, DocumentId: doc, DocumentName: d.Title, VersionLabel: d.VersionLabel, Statement: STATEMENT, AcknowledgedAt: at, Client: "Windows | Edge", Status: "Valid", VoidedAt: null, VoidedBy: null, VoidReason: null };
+    };
+    const acks = [
+      ack(4, "alex.jones@example.com", ago(60, 2)), ack(4, "priya.shah@example.com", ago(58, 6)), ack(4, "tom.evans@example.com", ago(57, 3)),
+      ack(3, "priya.shah@example.com", ago(9, 4)),
+      Object.assign(ack(3, "tom.evans@example.com", ago(8, 2)), { Status: "Voided", VoidedAt: ago(7, 5), VoidedBy: "jo.admin@example.com", VoidReason: "Signed on a shared computer by a colleague" }),
+      ack(2, "alex.jones@example.com", ago(4, 2)), ack(2, "priya.shah@example.com", ago(3, 5)), ack(2, "tom.evans@example.com", ago(3, 1)),
+      ack(1, "priya.shah@example.com", ago(2, 3)), ack(1, "tom.evans@example.com", ago(1, 6)),
+    ];
+    return { docs, signers, acks, admins: ["jo.admin@example.com"], runs: [], nextDoc: 5, nextSigner: sid, nextAck: aid };
+  }
+
+  const KEY = "read-ack-powerapp-demo-v1";
+  let db, ui;
+  function load() {
+    try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && s.db && s.ui) { db = s.db; ui = s.ui; return; } } catch (e) { /* fresh */ }
+    db = seed();
+    ui = { me: "jo.admin@example.com", screen: "scrAdmin", docId: null, addResults: [], justSigned: false };
+  }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ db, ui })); } catch (e) { /* ignore */ } };
+
+  const meName = () => dirName(ui.me);
+  const isAdmin = () => db.admins.includes(ui.me);
+  const doc = (id) => db.docs.find((d) => d.ID === id);
+  const liveAck = (docId, email) => db.acks.find((a) => a.DocumentId === docId && a.SignerEmail === email && a.Status === "Valid");
+  const listed = (docId, email) => db.signers.some((s) => s.DocumentId === docId && s.SignerEmail === email);
+
+  let busy = false;
+  let toastTimer;
+  function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600); }
+  function go(screen, extra) { ui = Object.assign({}, ui, { screen }, extra || {}); save(); render(); document.querySelector(".device").scrollIntoView({ block: "nearest" }); }
+
+  // ---------- simulated flows (the app never writes acknowledgements itself) ----------
+  function logRun(name, caller, steps, result, ok) {
+    db.runs.unshift({ at: new Date().toISOString(), name, caller, steps, result, ok });
+    db.runs = db.runs.slice(0, 30);
+  }
+  function RecordAcknowledgement(docId, client) {
+    const caller = ui.me, steps = [`Caller from Microsoft 365: ${caller}`];
+    const d = doc(docId);
+    if (!d) { logRun("RecordAcknowledgement", caller, steps.concat("Document not found"), "missing", false); return "missing"; }
+    steps.push(`Document: ${d.Title} (${d.Status})`);
+    if (d.Status !== "Open") { logRun("RecordAcknowledgement", caller, steps, "closed", false); return "closed"; }
+    if (!listed(docId, caller)) { logRun("RecordAcknowledgement", caller, steps.concat("Not in RA Expected Signers"), "not-listed", false); return "not-listed"; }
+    steps.push("On the document's list");
+    if (liveAck(docId, caller)) { logRun("RecordAcknowledgement", caller, steps.concat("Already has a valid record"), "already", false); return "already"; }
+    const at = new Date().toISOString();
+    db.acks.push({ ID: db.nextAck++, Title: dirName(caller), SignerEmail: caller, DocumentId: docId, DocumentName: d.Title, VersionLabel: d.VersionLabel, Statement: STATEMENT, AcknowledgedAt: at, Client: client, Status: "Valid", VoidedAt: null, VoidedBy: null, VoidReason: null });
+    steps.push(`Created row in RA Acknowledgements, time from utcNow(): ${fmtTime(at)}`);
+    logRun("RecordAcknowledgement", caller, steps, "signed", true);
+    return "signed";
+  }
+  function VoidAcknowledgement(ackId, reason) {
+    const caller = ui.me, steps = [`Caller from Microsoft 365: ${caller}`];
+    if (!db.admins.includes(caller)) { logRun("VoidAcknowledgement", caller, steps.concat("Not in RA Admins"), "not-authorised", false); return "not-authorised"; }
+    steps.push("Found in RA Admins");
+    if (!reason.trim()) { logRun("VoidAcknowledgement", caller, steps.concat("No reason given"), "reason-required", false); return "reason-required"; }
+    const a = db.acks.find((x) => x.ID === ackId);
+    if (!a) { logRun("VoidAcknowledgement", caller, steps.concat("Record not found"), "missing", false); return "missing"; }
+    if (a.Status !== "Valid") { logRun("VoidAcknowledgement", caller, steps.concat("Already voided"), "already", false); return "already"; }
+    Object.assign(a, { Status: "Voided", VoidedAt: new Date().toISOString(), VoidedBy: caller, VoidReason: reason.trim() });
+    steps.push(`Updated row ${a.ID}: Status = Voided, reason kept`);
+    logRun("VoidAcknowledgement", caller, steps, "voided", true);
+    return "voided";
+  }
+  function runFlow(label, fn) {
+    busy = true; render(label);
+    setTimeout(() => { const r = fn(); busy = false; save(); render(); afterFlow(r); }, 650);
+  }
+  let afterFlow = () => {};
+
+  // ---------- screens ----------
+  function statusChip(text, kind) { return `<span class="status s-${kind}">${esc(text)}</span>`; }
+
+  function scrHome() {
+    const mine = db.signers.filter((s) => s.SignerEmail === ui.me).map((s) => {
+      const d = doc(s.DocumentId); const a = liveAck(s.DocumentId, ui.me);
+      return d && { d, a };
+    }).filter(Boolean).sort((x, y) => rank(x) - rank(y) || String(x.d.DueDate || "9").localeCompare(String(y.d.DueDate || "9")));
+    function rank(r) { return r.a ? 2 : r.d.Status === "Closed" ? 1 : 0; }
+    const n = mine.filter((r) => !r.a && r.d.Status === "Open").length;
+    const summary = mine.length === 0 ? "You haven't been asked to acknowledge any documents yet." : n === 0 ? "You're up to date." : `${n} ${n === 1 ? "document needs" : "documents need"} your acknowledgement.`;
+    return `<p class="screen-name">scrHome</p><h1>My documents</h1><p class="sub">${summary}</p>
+      <div class="gallery">${mine.map(({ d, a }) => {
+        const chip = a ? statusChip("Signed " + fmtDT(a.AcknowledgedAt), "ok") : d.Status === "Closed" ? statusChip("Closed", "muted") : overdue(d.DueDate) ? statusChip("Overdue", "bad") : statusChip("To sign", "warn");
+        return `<button type="button" class="item" data-open-sign="${d.ID}"><span class="title">${esc(d.Title)}</span>${chip}<span class="chev" aria-hidden="true">›</span>
+          <span class="detail">${d.VersionLabel ? "Version " + esc(d.VersionLabel) + "  ·  " : ""}${d.DueDate ? "Due " + fmtD(d.DueDate) : "No due date"}</span></button>`;
+      }).join("")}</div>
+      ${isAdmin() && mine.length === 0 ? `<p class="hint" style="margin-top:14px">Tip: pick a reader such as Sam Patel under <strong>Signed in as</strong> to try signing.</p>` : ""}`;
+  }
+
+  function signState(d) {
+    if (!d) return "missing";
+    if (liveAck(d.ID, ui.me)) return "signed";
+    if (!listed(d.ID, ui.me)) return isAdmin() && d.Status === "Open" ? "admin-not-listed" : "not-listed";
+    if (d.Status !== "Open") return "closed";
+    return "can-sign";
+  }
+
+  function scrSign(busyLabel) {
+    const d = doc(ui.docId), state = signState(d), a = d && liveAck(d.ID, ui.me);
+    const msg = {
+      signed: () => (ui.justSigned ? "Thank you. " : "") + "You acknowledged this document on " + fmtDT(a.AcknowledgedAt) + ".",
+      "not-listed": () => "You're not on the list for this document. If you think you should be, contact your admin.",
+      "admin-not-listed": () => "You're not on this document's list yet. As an admin, you can add yourself.",
+      closed: () => "This document is no longer accepting acknowledgements.",
+      missing: () => "This document can't be found. Check the link you were sent.",
+    };
+    const kind = state === "signed" ? "ok" : state === "missing" ? "bad" : "warn";
+    return `<p class="screen-name">scrSign</p><button type="button" class="back" data-go="scrHome">‹ My documents</button>
+      <h1>${d ? esc(d.Title) : "Document not found"}</h1>
+      ${d ? `<dl class="meta">${d.VersionLabel ? `<dt>Version</dt><dd>${esc(d.VersionLabel)}</dd>` : ""}${d.DueDate ? `<dt>Due</dt><dd>${fmtD(d.DueDate)}</dd>` : ""}<dt>Signing as</dt><dd>${esc(meName())}</dd></dl>
+        ${d.Description ? `<p>${esc(d.Description)}</p>` : ""}
+        ${d.DocumentLink ? `<p><a class="btn ghost small" href="${esc(d.DocumentLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Open the document</a> <span class="hint">Sample link in this demo.</span></p>` : ""}` : ""}
+      ${state !== "can-sign" ? `<div class="message s-${kind}" role="status">${esc(msg[state]())}</div>` : ""}
+      ${state === "admin-not-listed" ? `<button type="button" class="btn" data-add-me="${d.ID}" data-then="sign">Add me to the list</button>` : ""}
+      ${state === "can-sign" ? `<label class="check" for="chkAgree"><input type="checkbox" id="chkAgree"${busyLabel ? " checked disabled" : ""}> ${STATEMENT}</label>
+        <button type="button" class="btn" id="btnConfirm" disabled>${busyLabel ? `<span class="spinner" aria-hidden="true"></span>Running ${esc(busyLabel)}…` : "Confirm"}</button>
+        <p class="hint">Your name, the date and time are recorded when you confirm. You can't undo this yourself.</p>` : ""}`;
+  }
+
+  function counts(d) {
+    const s = db.signers.filter((x) => x.DocumentId === d.ID);
+    return { expected: s.length, signed: s.filter((x) => liveAck(d.ID, x.SignerEmail)).length };
+  }
+
+  function scrAdmin() {
+    const docs = db.docs.slice().sort((a, b) => (a.Status === "Closed") - (b.Status === "Closed") || String(a.DueDate || "9").localeCompare(String(b.DueDate || "9")));
+    return `<p class="screen-name">scrAdmin</p>
+      <div class="row between"><h1>Documents</h1><div class="row"><button type="button" class="btn ghost" data-go="scrHome">My documents</button><button type="button" class="btn" data-new-doc>New document</button></div></div>
+      <p class="sub">Open documents first, soonest due first.</p>
+      <div class="gallery">${docs.map((d) => {
+        const c = counts(d), pct = c.expected ? Math.round((c.signed / c.expected) * 100) : 0;
+        const late = d.Status === "Open" && c.signed < c.expected && overdue(d.DueDate);
+        return `<button type="button" class="item" data-open-doc="${d.ID}"><span class="title">${esc(d.Title)}${d.VersionLabel ? `<span class="hint">  ·  Version ${esc(d.VersionLabel)}</span>` : ""}</span>
+          ${d.Status === "Open" ? statusChip("Open", "ok") : statusChip("Closed", "muted")}<span class="chev" aria-hidden="true">›</span>
+          <span class="detail">${d.DueDate ? "Due " + fmtD(d.DueDate) : "No due date"}${late ? ` · <strong style="color:var(--bad)">Overdue</strong>` : ""} · ${c.signed} of ${c.expected} signed · ${c.expected - c.signed} outstanding
+          <span class="track" aria-hidden="true"><span style="width:${pct}%"></span></span></span></button>`;
+      }).join("")}</div>
+      <div class="section"><h2>Export</h2><p class="hint" style="margin:0">In the real app, <strong>Open records in SharePoint</strong> opens the RA Acknowledgements list. Filter by document or date there, then choose <strong>Export → Export to CSV</strong>. The list is shown on the right in this demo.</p></div>`;
+  }
+
+  function scrDocEdit() {
+    const d = ui.docId ? doc(ui.docId) : null;
+    return `<p class="screen-name">scrDocEdit</p><button type="button" class="back" data-go="${d ? "scrDocAdmin" : "scrAdmin"}">‹ ${d ? "Back" : "Documents"}</button>
+      <h1>${d ? "Edit document" : "New document"}</h1>
+      <p class="sub">Record the document by name. People read it wherever it's held today.</p>
+      <form class="section" id="frmDocument">
+        <label class="f" for="f-name">Document name</label><input type="text" id="f-name" required value="${esc(d ? d.Title : "")}">
+        <label class="f" for="f-desc">Description</label><textarea id="f-desc">${esc(d ? d.Description : "")}</textarea>
+        <div class="grid-2"><div><label class="f" for="f-ver">Version</label><input type="text" id="f-ver" value="${esc(d ? d.VersionLabel : "")}"></div>
+        <div><label class="f" for="f-due">Due date</label><input type="date" id="f-due" value="${esc(d ? d.DueDate : "")}"></div></div>
+        <label class="f" for="f-link">Where the document is held</label><input type="url" id="f-link" placeholder="https://" value="${esc(d ? d.DocumentLink : "")}">
+        <div class="row" style="margin-top:16px"><button type="submit" class="btn">${d ? "Save changes" : "Create document"}</button></div>
+      </form>`;
+  }
+
+  function scrDocAdmin() {
+    const d = doc(ui.docId); if (!d) return scrAdmin();
+    const c = counts(d), me = ui.me, myAck = liveAck(d.ID, me), meListed = listed(d.ID, me);
+    const signers = db.signers.filter((s) => s.DocumentId === d.ID).sort((a, b) => a.Title.localeCompare(b.Title));
+    const acks = db.acks.filter((a) => a.DocumentId === d.ID).sort((a, b) => b.AcknowledgedAt.localeCompare(a.AcknowledgedAt));
+    return `<p class="screen-name">scrDocAdmin</p><button type="button" class="back" data-go="scrAdmin">‹ Documents</button>
+      <div class="row between"><h1>${esc(d.Title)} ${d.Status === "Open" ? statusChip("Open", "ok") : statusChip("Closed", "muted")}</h1><button type="button" class="btn ghost small" data-go="scrDocEdit">Edit details</button></div>
+      <p class="sub">${c.signed} of ${c.expected} signed${d.VersionLabel ? " · Version " + esc(d.VersionLabel) : ""}${d.DueDate ? " · Due " + fmtD(d.DueDate) : ""}</p>
+
+      <div class="section"><h2>Share link</h2>
+        <p class="hint" style="margin-top:0">Send by email, Teams or intranet. It opens the app straight on this document.</p>
+        <div class="copy"><input type="text" readonly id="txtShareLink" value="${APP_LINK}&amp;docId=${d.ID}" aria-label="Share link"><button type="button" class="btn ghost small" data-copy="txtShareLink">Copy link</button></div>
+        <div class="row" style="margin-top:10px"><button type="button" class="btn ghost small" data-toggle-status>${d.Status === "Open" ? "Close link (stop accepting signatures)" : "Reopen link"}</button></div>
+      </div>
+
+      <div class="section"><h2>Your acknowledgement</h2>
+        ${myAck ? `<div class="message s-ok" style="margin:0">You acknowledged this document on ${fmtDT(myAck.AcknowledgedAt)}.</div>`
+          : meListed ? `<div class="row"><span>You're on this document's list and haven't signed yet.</span>${d.Status === "Open" ? `<button type="button" class="btn small" data-open-sign="${d.ID}">Sign this document</button>` : ""}</div>`
+          : `<div class="row"><span class="hint">You're not on this document's list. Admins acknowledge documents the same way as everyone else.</span><button type="button" class="btn ghost small" data-add-me="${d.ID}" data-then="stay">Add me to this list</button></div>`}
+      </div>
+
+      <div class="section"><h2>People expected to sign (${signers.length})</h2>
+        <div class="gallery">${signers.map((s) => {
+          const a = liveAck(d.ID, s.SignerEmail);
+          return `<div class="item"><span class="title">${esc(s.Title)}</span>${a ? statusChip("Signed " + fmtDT(a.AcknowledgedAt), "ok") : overdue(d.DueDate) ? statusChip("Overdue", "bad") : statusChip("Outstanding", "warn")}
+            <button type="button" class="icon-btn" data-remove="${s.ID}" aria-label="Remove ${esc(s.Title)} from this document" title="Remove">✕</button>
+            <span class="detail">${esc(s.SignerEmail)}</span></div>`;
+        }).join("") || `<p class="empty">No one yet.</p>`}</div>
+        <label class="f" for="txtPeople">Add people <span class="hint">One per line: Name, email. Or paste two columns from Excel. Names come from your directory.</span></label>
+        <textarea id="txtPeople" placeholder="Lee Brown, lee.brown@example.com"></textarea>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn" data-add-people>Add to this document</button>
+          <button type="button" class="btn ghost small" data-sample>Fill in a sample list</button></div>
+        ${ui.addResults.length ? `<ul class="results">${ui.addResults.map((r) => `<li><strong>${esc(r.Result)}:</strong> <span class="mono">${esc(r.Line)}</span></li>`).join("")}</ul>` : ""}
+      </div>
+
+      <div class="section"><h2>Acknowledgement records (${acks.length})</h2>
+        <div class="gallery">${acks.map((a) => `<div class="item"><span class="title">${esc(a.Title)} <span class="hint">· ${esc(a.SignerEmail)}</span></span>${a.Status === "Valid" ? statusChip("Valid", "ok") : statusChip("Voided", "muted")}
+          <span class="detail">Signed ${fmtDT(a.AcknowledgedAt)}${a.VersionLabel ? " · Version " + esc(a.VersionLabel) : ""}${a.Status === "Voided" ? `<br>Voided ${fmtDT(a.VoidedAt)} by ${esc(a.VoidedBy)}: ${esc(a.VoidReason)}` : ""}</span>
+          ${a.Status === "Valid" ? `<div class="void-row"><label class="visually-hidden" for="void-${a.ID}">Reason for voiding</label><input type="text" id="void-${a.ID}" placeholder="Reason for voiding"><button type="button" class="btn danger small" data-void="${a.ID}" disabled>Void</button></div>` : ""}</div>`).join("") || `<p class="empty">No acknowledgements yet.</p>`}</div>
+        <p class="hint">Records can't be edited or deleted. Voiding goes through a flow and keeps the record and the reason.</p>
+      </div>`;
+  }
+
+  // ---------- render ----------
+  function render(busyLabel) {
+    const screens = { scrHome, scrSign, scrAdmin, scrDocEdit, scrDocAdmin };
+    if (!isAdmin() && ["scrAdmin", "scrDocEdit", "scrDocAdmin"].includes(ui.screen)) ui.screen = "scrHome";
+    document.getElementById("appbar").innerHTML = `<span class="app-name">Read and Acknowledge</span>
+      ${isAdmin() ? `<button type="button" data-go="${ui.screen === "scrHome" || ui.screen === "scrSign" ? "scrAdmin" : "scrHome"}">${ui.screen === "scrHome" || ui.screen === "scrSign" ? "Admin" : "My documents"}</button>` : ""}
+      <span class="me"><span class="avatar" aria-hidden="true">${initials(meName())}</span>${esc(meName())}</span>`;
+    document.getElementById("screen").innerHTML = screens[ui.screen](busyLabel);
+    const sel = document.getElementById("as");
+    sel.innerHTML = DIRECTORY.slice(0, 6).map((u) => `<option value="${u.email}"${u.email === ui.me ? " selected" : ""}>${esc(u.name)}${db.admins.includes(u.email) ? " (admin)" : ""}</option>`).join("");
+    renderSide();
+  }
+  function renderSide() {
+    document.getElementById("runs").innerHTML = db.runs.length ? db.runs.map((r) => `<li class="run ${r.ok ? "ok" : "no"}"><div><span class="name">${r.name}</span> · ${fmtTime(r.at)} · result <code>${esc(r.result)}</code></div><ul class="steps">${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></li>`).join("")
+      : `<li><p class="empty">No runs yet. Press <strong>Confirm</strong> on a document, or void a record, to see the flow check who's calling and write the record.</p></li>`;
+    const rows = db.acks.slice().sort((a, b) => b.ID - a.ID);
+    document.getElementById("acks").innerHTML = `<table><thead><tr><th>ID</th><th>Name</th><th>Document</th><th>Version</th><th>Acknowledged at</th><th>Status</th><th>Voided by</th></tr></thead><tbody>
+      ${rows.map((a) => `<tr class="${a.Status === "Voided" ? "voided" : ""}"><td>${a.ID}</td><td>${esc(a.Title)}</td><td>${esc(a.DocumentName)}</td><td>${esc(a.VersionLabel)}</td><td>${fmtDT(a.AcknowledgedAt)}</td><td>${a.Status}</td><td>${esc(a.VoidedBy || "")}</td></tr>`).join("")}</tbody></table>`;
+  }
+
+  // ---------- events ----------
+  const EMAIL_RE = /[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/;
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("button, [data-go]"); if (!t || busy) return;
+    if (t.dataset.go) return go(t.dataset.go, { addResults: [] });
+    if (t.dataset.openSign) return go("scrSign", { docId: Number(t.dataset.openSign), justSigned: false });
+    if (t.dataset.openDoc) return go("scrDocAdmin", { docId: Number(t.dataset.openDoc), addResults: [] });
+    if ("newDoc" in t.dataset) return go("scrDocEdit", { docId: null });
+    if (t.id === "btnConfirm") {
+      afterFlow = (r) => {
+        if (r === "signed") { ui.justSigned = true; save(); render(); }
+        else toast({ already: "You've already acknowledged this document.", closed: "This document is no longer accepting acknowledgements.", "not-listed": "You're not on the list for this document." }[r] || "That didn't go through.");
+      };
+      return runFlow("RecordAcknowledgement", () => RecordAcknowledgement(ui.docId, "Demo | " + navigator.userAgent.slice(0, 60)));
+    }
+    if (t.dataset.addMe) {
+      const id = Number(t.dataset.addMe);
+      if (!listed(id, ui.me)) db.signers.push({ ID: db.nextSigner++, Title: meName(), DocumentId: id, SignerEmail: ui.me });
+      if (t.dataset.then === "sign") return go("scrSign", { docId: id, justSigned: false });
+      save(); render(); return toast("You're on this document's list.");
+    }
+    if ("toggleStatus" in t.dataset) { const d = doc(ui.docId); d.Status = d.Status === "Open" ? "Closed" : "Open"; save(); render(); return toast(d.Status === "Closed" ? "Link closed. No more signatures accepted." : "Link reopened."); }
+    if (t.dataset.remove) { const s = db.signers.find((x) => x.ID === Number(t.dataset.remove)); db.signers = db.signers.filter((x) => x !== s); save(); render(); return toast(`Removed ${s.Title} from this document.`); }
+    if ("sample" in t.dataset) { const ta = document.getElementById("txtPeople"); ta.value = "Name\tEmail\nLee Brown\tlee.brown@example.com\nAna\tana.silva@example.com\nSam Patel\tsam.patel@example.com\nnew.starter@example.com\nnot an email"; return ta.focus(); }
+    if ("addPeople" in t.dataset) {
+      const lines = document.getElementById("txtPeople").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const results = [], seen = new Set();
+      lines.forEach((line) => {
+        const m = line.match(EMAIL_RE);
+        if (!m) return results.push({ Line: line, Result: "Skipped: no email address" });
+        const email = m[0].toLowerCase(); if (seen.has(email)) return; seen.add(email);
+        if (listed(ui.docId, email)) return results.push({ Line: line, Result: "Already on the list" });
+        const typed = line.replace(m[0], "").replace(/[\t,]/g, " ").trim();
+        const name = dirName(email);
+        db.signers.push({ ID: db.nextSigner++, Title: name || typed || email, DocumentId: ui.docId, SignerEmail: email });
+        results.push({ Line: line, Result: name ? "Added" : "Added, but not found in your directory, so check the address" });
+      });
+      ui.addResults = results; save(); return render();
+    }
+    if (t.dataset.copy) {
+      const input = document.getElementById(t.dataset.copy);
+      try { navigator.clipboard.writeText(input.value).then(() => toast("Link copied."), () => { input.select(); toast("Selected. Press Ctrl+C to copy."); }); }
+      catch (err) { input.select(); toast("Selected. Press Ctrl+C to copy."); }
+      return;
+    }
+    if (t.dataset.void) {
+      const id = Number(t.dataset.void), reason = document.getElementById("void-" + id).value;
+      const who = (db.acks.find((a) => a.ID === id) || {}).Title;
+      afterFlow = (r) => toast(r === "voided" ? `Voided. ${who} can sign again.` : r === "not-authorised" ? "Only admins can void records." : "This record was already voided.");
+      return runFlow("VoidAcknowledgement", () => VoidAcknowledgement(id, reason));
+    }
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target.id && e.target.id.startsWith("void-")) {
+      const btn = document.querySelector(`[data-void="${e.target.id.slice(5)}"]`);
+      if (btn) btn.disabled = !e.target.value.trim();
+    }
+  });
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "chkAgree") document.getElementById("btnConfirm").disabled = !e.target.checked;
+    if (e.target.id === "as") {
+      ui.me = e.target.value; ui.addResults = []; ui.justSigned = false;
+      if (!isAdmin() && ui.screen !== "scrSign") ui.screen = "scrHome";
+      save(); render(); toast(`Signed in as ${meName()}.`);
+    }
+  });
+  document.addEventListener("submit", (e) => {
+    if (e.target.id !== "frmDocument") return;
+    e.preventDefault();
+    const val = (id) => document.getElementById(id).value.trim();
+    if (!val("f-name")) return toast("Give the document a name.");
+    if (val("f-link") && !/^https?:\/\/\S+$/i.test(val("f-link"))) return toast("Enter the location as a web address starting with https://");
+    const fields = { Title: val("f-name"), Description: val("f-desc"), VersionLabel: val("f-ver"), DueDate: val("f-due"), DocumentLink: val("f-link") };
+    if (ui.docId) Object.assign(doc(ui.docId), fields);
+    else { const d = Object.assign({ ID: db.nextDoc++, Status: "Open" }, fields); db.docs.push(d); ui.docId = d.ID; }
+    toast("Saved."); go("scrDocAdmin", { addResults: [] });
+  });
+  document.getElementById("reset").addEventListener("click", () => { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } load(); render(); toast("Demo reset to the sample data."); });
+
+  load(); render();
+})();
+</script>
+</body>
+</html>
