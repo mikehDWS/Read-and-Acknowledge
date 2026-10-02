@@ -43,3 +43,15 @@ export function managedDepartments(userId: string, db?: Queryable): Promise<Depa
     db,
   );
 }
+
+/** Departments a person can run briefings for: the ones they manage, plus their own if a supervisor. */
+export function briefingDepartments(userId: string, db?: Queryable): Promise<Department[]> {
+  return query<Department>(
+    `SELECT d.id, d.name FROM departments d
+      WHERE d.id IN (SELECT dm.department_id FROM department_managers dm WHERE dm.user_id = $1)
+         OR d.id = (SELECT u.department_id FROM users u WHERE u.id = $1 AND u.is_supervisor)
+      ORDER BY d.sort_order, d.name`,
+    [userId],
+    db,
+  );
+}

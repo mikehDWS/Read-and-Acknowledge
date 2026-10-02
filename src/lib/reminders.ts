@@ -26,7 +26,7 @@ export async function buildManagerDigests(db?: Queryable): Promise<ManagerDigest
     `SELECT u.id AS user_id, u.name, u.email,
             ARRAY_AGG(d.name ORDER BY d.sort_order, d.name) AS departments
        FROM department_managers dm
-       JOIN users u ON u.id = dm.user_id
+       JOIN users u ON u.id = dm.user_id AND u.email IS NOT NULL
        JOIN departments d ON d.id = dm.department_id
       GROUP BY u.id, u.name, u.email
       ORDER BY lower(u.name)`,

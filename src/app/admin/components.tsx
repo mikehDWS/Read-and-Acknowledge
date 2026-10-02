@@ -356,10 +356,11 @@ export function PersonLinkButton({ userId, hasPassword }: { userId: string; hasP
 type PersonValues = {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   employee_id: string | null;
   department_id: number | null;
   manages_ids: number[];
+  is_supervisor: boolean;
 };
 
 export function PersonEditForm({
@@ -377,8 +378,10 @@ export function PersonEditForm({
         <input type="hidden" name="id" value={person.id} />
         <label htmlFor={`name-${person.id}`}>Name</label>
         <input id={`name-${person.id}`} name="name" type="text" required defaultValue={person.name} />
-        <label htmlFor={`email-${person.id}`}>Email</label>
-        <input id={`email-${person.id}`} name="email" type="email" required defaultValue={person.email} />
+        <label htmlFor={`email-${person.id}`}>
+          Email <span className="hint">Needed for them to have their own login. Leave blank for briefed-only staff.</span>
+        </label>
+        <input id={`email-${person.id}`} name="email" type="email" defaultValue={person.email ?? ""} />
         <label htmlFor={`emp-${person.id}`}>
           Employee ID <span className="hint">Optional. Never shown to other readers.</span>
         </label>
@@ -390,6 +393,10 @@ export function PersonEditForm({
           defaultValue={person.department_id}
           emptyLabel="No department"
         />
+        <label className="check-item" htmlFor={`sup-${person.id}`} style={{ marginTop: 16 }}>
+          <input id={`sup-${person.id}`} type="checkbox" name="is_supervisor" value="yes" defaultChecked={person.is_supervisor} />
+          Supervisor <span className="hint">Can brief staff in their own department who don&apos;t have an account.</span>
+        </label>
         <p className="group-label">
           Manages <span className="hint">Managers see who in these departments still needs to sign.</span>
         </p>

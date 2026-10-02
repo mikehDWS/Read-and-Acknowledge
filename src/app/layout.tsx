@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { managedDepartments } from "@/lib/departments";
+import { briefingDepartments, managedDepartments } from "@/lib/departments";
 import { getCurrentUser } from "@/lib/session";
 import { signOut } from "./login/actions";
 import "./globals.css";
@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   const isManager = user ? (await managedDepartments(user.id)).length > 0 : false;
+  const canBrief = user ? (await briefingDepartments(user.id)).length > 0 : false;
   return (
     <html lang="en-GB">
       <body>
@@ -29,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <nav aria-label="Main">
                 <Link href="/my">My documents</Link>
                 {isManager && <Link href="/team">My team</Link>}
+                {canBrief && <Link href="/brief">Brief staff</Link>}
                 {user.role === "admin" && (
                   <>
                     <Link href="/admin">Documents</Link>

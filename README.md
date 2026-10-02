@@ -94,6 +94,12 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
   get a **My team** page showing, for each open document, who in their departments has signed and who
   still needs to, with the sign link to chase them. They see sign status only, not signatures, and
   can't open the admin pages unless they're also an admin.
+- **Brief staff without an account**: managers, and people ticked as **Supervisor** in the **Edit**
+  form, get a **Brief staff** page. A supervisor briefs their own department; a manager briefs the
+  departments they manage. After briefing a document in person, they hand their device to each person
+  to sign against the same statement. People who aren't listed can be added there with a name,
+  department and optional employee ID; they're added to People without a login (no email needed).
+  Each record shows who gave the briefing, on the document page and in the CSV (`briefed_by`).
 - **Weekly reminders**: every Monday at 07:00 UTC (08:00 UK summer time), each manager with outstanding
   signatures is emailed who in their departments still needs to sign, with the sign links and a link
   to **My team**. A manager gets at most one a week. The **Reminders** page previews each manager's
@@ -109,8 +115,9 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
   page), then sign it like anyone else. Their documents also appear under **My documents**.
 - Give each person a department when adding them (pick one for the whole batch, or put it on each
   line, e.g. `Sam Patel, sam@example.com, Ferrybridge`), and change it later from the People page.
-- Manage people: edit names, emails and employee IDs, make or remove admins, and create
-  set-password or reset links.
+- Manage people: edit names, emails and employee IDs, make or remove admins and supervisors, and create
+  set-password or reset links. Email is optional for people who only sign at briefings; they can't sign in
+  until they're given an email and a set-password link.
 
 ## Decisions on the brief's open questions
 
@@ -134,7 +141,7 @@ Other choices worth knowing:
 - Acknowledgements are **append-only, enforced by the database**: a trigger blocks deletes, truncates
   and edits. The only change allowed is voiding a live record once, with a reason, and who voided it.
   A partial unique index allows one live acknowledgement per person per document.
-- Each record stores the signature image (and whether it was drawn or typed), the signer's name, email and department at the time, document name and category, version label, the exact statement
+- Each record stores the signature image (and whether it was drawn or typed), who gave the briefing if it was signed at one, the signer's name, email and department at the time, document name and category, version label, the exact statement
   text, timestamp, IP address and browser user agent.
 - Admin actions (creating documents, adding and removing people, role changes, voids, account links)
   are written to an `audit_log` table.
@@ -203,6 +210,8 @@ src/app/login         sign-in
 src/app/account       set-password and reset links
 src/app/my            reader's list of documents
 src/app/sign          the sign page
+src/app/team          a manager's view of who has signed
+src/app/brief         briefings: staff sign on the manager's or supervisor's device
 src/app/admin         dashboard, documents, people and CSV export
 tests/                unit and database tests
 ```

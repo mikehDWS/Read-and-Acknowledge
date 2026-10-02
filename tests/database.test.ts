@@ -144,6 +144,23 @@ describe.skipIf(!url)("acknowledgements table", () => {
     );
   });
 
+  it("records who gave a briefing, for people without an email, and protects it", async () => {
+    const person = await client.query("INSERT INTO users (name) VALUES ('No Login') RETURNING id");
+    const { rows } = await client.query(
+      `INSERT INTO acknowledgements (document_id, user_id, signer_name, signer_email, document_name, statement_text,
+                                     briefed_by, briefed_by_name)
+       VALUES ($1, $2, 'No Login', NULL, 'Policy', 'Statement', $3, 'Admin') RETURNING id`,
+      [docId, person.rows[0].id, adminId],
+    );
+    await expectError("UPDATE acknowledgements SET briefed_by_name = 'Someone else' WHERE id = $1", [rows[0].id], /voided/);
+    await expectError(
+      `INSERT INTO acknowledgements (document_id, user_id, signer_name, document_name, statement_text, briefed_by)
+       VALUES ($1, $2, 'Reader', 'Policy', 'Statement', $3)`,
+      [docId, userId, adminId],
+      /briefer_named/,
+    );
+  });
+
   it("only accepts web links for document locations", async () => {
     await expectError("UPDATE documents SET location_url = 'javascript:alert(1)' WHERE id = $1", [docId], /check/);
   });

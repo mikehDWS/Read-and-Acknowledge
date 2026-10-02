@@ -325,21 +325,29 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
   const admin = await assertAdmin();
   const id = text(form, "id", 36);
   const name = text(form, "name", 200);
-  const email = text(form, "email", 254).toLowerCase();
+  const email = text(form, "email", 254).toLowerCase() || null;
   const employeeId = optionalText(form, "employee_id", 100);
+  const isSupervisor = form.get("is_supervisor") === "yes";
   const departments = await listDepartments();
   const departmentId = departmentIdFrom(form.get("department_id"), departments);
   const managesIds = idsFrom(form, "manages_ids", departments);
   if (!isUuid(id)) return { error: "Person not found." };
   if (departmentId === undefined) return { error: "Choose a department from the list." };
   if (!name) return { error: "Enter a name." };
-  if (!isEmail(email)) return { error: "Enter a valid email address." };
+  if (email !== null && !isEmail(email)) return { error: "Enter a valid email address, or leave it blank." };
   try {
     await transaction(async (db) => {
+      const current = await queryOne<{ password_hash: string | null }>(
+        "SELECT password_hash FROM users WHERE id = $1",
+        [id],
+        db,
+      );
+      if (current?.password_hash && email === null) throw new Error("NEEDS_EMAIL");
       await query(
-        `UPDATE users SET name = $2, email = $3, employee_id = $4, department_id = $5, updated_at = now()
+        `UPDATE users SET name = $2, email = $3, employee_id = $4, department_id = $5, is_supervisor = $6,
+                updated_at = now()
           WHERE id = $1`,
-        [id, name, email, employeeId, departmentId],
+        [id, name, email, employeeId, departmentId, isSupervisor],
         db,
       );
       await query(
@@ -359,9 +367,13 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
         employee_id: employeeId,
         department_id: departmentId,
         manages_department_ids: managesIds,
+        is_supervisor: isSupervisor,
       });
     });
   } catch (err) {
+    if (err instanceof Error && err.message === "NEEDS_EMAIL") {
+      return { error: "This person signs in with their email, so it can't be removed." };
+    }
     if (isUniqueViolation(err)) return { error: "Someone else already uses that email address." };
     throw err;
   }
@@ -405,18 +417,20 @@ export async function createPersonLink(_prev: AccountLinkState, form: FormData):
   const id = text(form, "id", 36);
   if (!isUuid(id)) return { error: "Person not found." };
   const result = await transaction(async (db) => {
-    const user = await queryOne<{ has_password: boolean }>(
-      "SELECT password_hash IS NOT NULL AS has_password FROM users WHERE id = $1 FOR UPDATE",
+    const user = await queryOne<{ has_password: boolean; has_email: boolean }>(
+      "SELECT password_hash IS NOT NULL AS has_password, email IS NOT NULL AS has_email FROM users WHERE id = $1 FOR UPDATE",
       [id],
       db,
     );
     if (!user) return null;
+    if (!user.has_email) return "no-email" as const;
     const purpose = user.has_password ? "reset" : "setup";
     const token = await createAccountLink(db, id, purpose, admin.id);
     await audit(db, admin.id, `account_link.${purpose}`, "user", id);
     return { token, purpose } as const;
   });
   if (!result) return { error: "Person not found." };
+  if (result === "no-email") return { error: "Add an email address first; they sign in with it." };
   return { url: `${appBaseUrl(await headers())}/account/${result.token}`, purpose: result.purpose };
 }
 

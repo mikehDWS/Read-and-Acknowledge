@@ -30,7 +30,7 @@ type Doc = {
 type Signer = {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   has_password: boolean;
   acknowledged_at: Date | null;
   department: string | null;
@@ -41,7 +41,7 @@ type Signer = {
 type Ack = {
   id: string;
   signer_name: string;
-  signer_email: string;
+  signer_email: string | null;
   signer_department: string | null;
   version_label: string | null;
   acknowledged_at: Date;
@@ -49,6 +49,7 @@ type Ack = {
   voided_at: Date | null;
   void_reason: string | null;
   voided_by_name: string | null;
+  briefed_by_name: string | null;
   signature_method: "drawn" | "typed" | null;
 };
 
@@ -82,7 +83,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
       [id],
     ),
     query<Ack>(
-      `SELECT a.id, a.signer_name, a.signer_email, a.signer_department, a.signature_method, a.version_label, a.acknowledged_at, a.ip_address,
+      `SELECT a.id, a.signer_name, a.signer_email, a.signer_department, a.signature_method, a.briefed_by_name, a.version_label, a.acknowledged_at, a.ip_address,
               a.voided_at, a.void_reason, v.name AS voided_by_name
          FROM acknowledgements a LEFT JOIN users v ON v.id = a.voided_by
         WHERE a.document_id = $1
@@ -242,7 +243,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                 <tr key={s.id}>
                   <td>
                     {s.name}
-                    <span className="hint">{s.email}</span>
+                    {s.email && <span className="hint">{s.email}</span>}
                   </td>
                   <td>
                     {s.department ?? <span className="hint">No department</span>}
@@ -256,10 +257,15 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                     ) : (
                       <span className="badge warn">Outstanding</span>
                     )}
-                    {!s.has_password && (
+                    {!s.has_password && s.email && (
                       <div style={{ marginTop: 6 }}>
                         <span className="badge muted">No password set yet</span>{" "}
                         <PersonLinkButton userId={s.id} hasPassword={false} />
+                      </div>
+                    )}
+                    {!s.email && (
+                      <div style={{ marginTop: 6 }}>
+                        <span className="badge muted">No login: signs at a briefing</span>
                       </div>
                     )}
                   </td>
@@ -312,8 +318,9 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                 <tr key={a.id}>
                   <td>
                     {a.signer_name}
-                    <span className="hint">{a.signer_email}</span>
+                    {a.signer_email && <span className="hint">{a.signer_email}</span>}
                     {a.signer_department && <span className="hint">{a.signer_department}</span>}
+                    {a.briefed_by_name && <span className="hint">Briefed by {a.briefed_by_name}</span>}
                   </td>
                   <td>{formatDateTime(a.acknowledged_at)}</td>
                   <td>{a.version_label ?? "—"}</td>

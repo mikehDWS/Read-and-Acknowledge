@@ -19,7 +19,7 @@ type Row = {
   link_token: string;
   user_id: string;
   name: string;
-  email: string;
+  email: string | null;
   department: string;
   acknowledged_at: Date | null;
 };
@@ -139,7 +139,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                     <tr key={p.user_id}>
                       <td>
                         {p.name}
-                        <span className="hint">{p.email}</span>
+                        <span className="hint">{p.email ?? "No login: brief them in person"}</span>
                       </td>
                       <td>{p.department}</td>
                       <td>

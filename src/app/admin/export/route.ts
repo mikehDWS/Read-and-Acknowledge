@@ -10,13 +10,14 @@ type Row = {
   document_category: string | null;
   version_label: string | null;
   signer_name: string;
-  signer_email: string;
+  signer_email: string | null;
   signer_department: string | null;
   employee_id: string | null;
   acknowledged_at: Date;
   statement_text: string;
   signature_method: string | null;
   signature_typed_name: string | null;
+  briefed_by_name: string | null;
   ip_address: string | null;
   user_agent: string | null;
   voided_at: Date | null;
@@ -37,6 +38,7 @@ const HEADER = [
   "statement",
   "signature",
   "typed_name",
+  "briefed_by",
   "ip_address",
   "user_agent",
   "status",
@@ -64,7 +66,7 @@ export async function GET(request: NextRequest) {
   // Dates are whole UTC days; "to" is inclusive.
   const rows = await query<Row>(
     `SELECT a.id, a.document_name, a.document_category, a.version_label, a.signer_name, a.signer_email, a.signer_department, u.employee_id,
-            a.acknowledged_at, a.statement_text, a.signature_method, a.signature_typed_name, a.ip_address, a.user_agent,
+            a.acknowledged_at, a.statement_text, a.signature_method, a.signature_typed_name, a.briefed_by_name, a.ip_address, a.user_agent,
             a.voided_at, v.email AS voided_by, a.void_reason
        FROM acknowledgements a
        JOIN users u ON u.id = a.user_id
@@ -93,6 +95,7 @@ export async function GET(request: NextRequest) {
       r.statement_text,
       r.signature_method ?? "ticked",
       r.signature_typed_name,
+      r.briefed_by_name,
       r.ip_address,
       r.user_agent,
       r.voided_at ? "voided" : "valid",

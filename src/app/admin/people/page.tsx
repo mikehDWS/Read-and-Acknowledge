@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "People" };
 type Person = {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   employee_id: string | null;
   department_id: number | null;
   department: string | null;
@@ -18,6 +18,7 @@ type Person = {
   manages: string[];
   role: "reader" | "admin";
   has_password: boolean;
+  is_supervisor: boolean;
   locked: boolean;
   documents: number;
 };
@@ -35,7 +36,7 @@ export default async function PeoplePage({
   const departmentFilter =
     department === "none" ? "none" : departments.find((o) => String(o.id) === department)?.id ?? null;
   const people = await query<Person>(
-    `SELECT u.id, u.name, u.email, u.employee_id, u.department_id, o.name AS department, u.role,
+    `SELECT u.id, u.name, u.email, u.employee_id, u.department_id, o.name AS department, u.role, u.is_supervisor,
             ARRAY(SELECT dm.department_id FROM department_managers dm JOIN departments md ON md.id = dm.department_id
                    WHERE dm.user_id = u.id ORDER BY md.sort_order) AS manages_ids,
             ARRAY(SELECT md.name FROM department_managers dm JOIN departments md ON md.id = dm.department_id
@@ -107,7 +108,7 @@ export default async function PeoplePage({
                 <tr key={p.id}>
                   <td>
                     {p.name}
-                    <span className="hint">{p.email}</span>
+                    <span className="hint">{p.email ?? "No email"}</span>
                     {p.employee_id && <span className="hint">ID {p.employee_id}</span>}
                     <span className="hint">
                       {p.documents} {p.documents === 1 ? "document" : "documents"}
@@ -116,16 +117,23 @@ export default async function PeoplePage({
                   <td>
                     {p.department ?? <span className="hint">No department</span>}
                     {p.manages.length > 0 && <span className="hint">Manages {p.manages.join(", ")}</span>}
+                    {p.is_supervisor && <span className="hint">Supervisor</span>}
                   </td>
                   <td>
                     {p.has_password ? (
                       <span className="badge ok">Active</span>
-                    ) : (
+                    ) : p.email ? (
                       <span className="badge muted">No password set</span>
+                    ) : (
+                      <span className="badge muted">No login</span>
                     )}
                     {p.locked && <span className="badge bad">Locked for now</span>}
                     <div style={{ marginTop: 6 }}>
-                      <PersonLinkButton userId={p.id} hasPassword={p.has_password} />
+                      {p.email ? (
+                        <PersonLinkButton userId={p.id} hasPassword={p.has_password} />
+                      ) : (
+                        <span className="hint">Signs at briefings. Add an email to give them a login.</span>
+                      )}
                     </div>
                   </td>
                   <td>
