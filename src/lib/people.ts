@@ -1,6 +1,6 @@
 import { isEmail } from "./validation";
 
-export type ParsedPerson = { name: string; email: string };
+export type ParsedPerson = { name: string; email: string; outstation?: string };
 export type ParseProblem = { line: number; text: string; reason: string };
 
 /**
@@ -9,9 +9,15 @@ export type ParseProblem = { line: number; text: string; reason: string };
  *   Name<TAB>email       (pasted from a spreadsheet; either column order)
  *   Name <email>
  *   email                (name taken from the part before @)
+ * A column that exactly matches one of `outstations` (any case) is read as the person's outstation,
+ * e.g. "Sam Patel, sam@example.com, Ferrybridge".
  * Duplicate emails are collapsed; a header row such as "Name, Email" is skipped.
  */
-export function parsePeopleList(input: string): { people: ParsedPerson[]; problems: ParseProblem[] } {
+export function parsePeopleList(
+  input: string,
+  outstations: string[] = [],
+): { people: ParsedPerson[]; problems: ParseProblem[] } {
+  const outstationByKey = new Map(outstations.map((o) => [o.toLowerCase(), o]));
   const people: ParsedPerson[] = [];
   const problems: ParseProblem[] = [];
   const seen = new Set<string>();
@@ -26,6 +32,7 @@ export function parsePeopleList(input: string): { people: ParsedPerson[]; proble
 
     let name = "";
     let email = "";
+    let outstation: string | undefined;
 
     const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
     if (angle) {
@@ -43,7 +50,12 @@ export function parsePeopleList(input: string): { people: ParsedPerson[]; proble
         return;
       }
       email = parts[emailIndex];
-      name = parts.filter((_, i) => i !== emailIndex).join(" ").trim();
+      const outstationIndex = parts.findIndex((p, i) => i !== emailIndex && outstationByKey.has(p.toLowerCase()));
+      if (outstationIndex !== -1) outstation = outstationByKey.get(parts[outstationIndex].toLowerCase());
+      name = parts
+        .filter((_, i) => i !== emailIndex && i !== outstationIndex)
+        .join(" ")
+        .trim();
     }
 
     email = email.toLowerCase();
@@ -54,7 +66,7 @@ export function parsePeopleList(input: string): { people: ParsedPerson[]; proble
     if (!name) name = email.split("@")[0];
     if (seen.has(email)) return;
     seen.add(email);
-    people.push({ name: name.slice(0, 200), email });
+    people.push(outstation ? { name: name.slice(0, 200), email, outstation } : { name: name.slice(0, 200), email });
   });
 
   return { people, problems };

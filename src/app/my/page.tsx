@@ -20,7 +20,7 @@ export default async function MyDocumentsPage() {
   const user = await requireUser("/my");
   const rows = await query<Row>(
     `SELECT d.id, d.name, d.version_label, d.due_date, d.link_token, d.status, a.acknowledged_at
-       FROM expected_signers es
+       FROM document_signers es
        JOIN documents d ON d.id = es.document_id
        LEFT JOIN acknowledgements a
               ON a.document_id = d.id AND a.user_id = es.user_id AND a.voided_at IS NULL

@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { createAccountLink } from "@/lib/account-links";
 import { audit } from "@/lib/audit";
 import { isUniqueViolation, query, queryOne, transaction, type Queryable } from "@/lib/db";
-import { parsePeopleList, type ParseProblem } from "@/lib/people";
+import { findOutstation, listOutstations, outstationIdFrom, type Outstation } from "@/lib/outstations";
+import { parsePeopleList, type ParsedPerson, type ParseProblem } from "@/lib/people";
 import { appBaseUrl } from "@/lib/request";
 import { assertAdmin, endAllSessions } from "@/lib/session";
 import { newToken } from "@/lib/tokens";
@@ -53,6 +54,7 @@ export async function createDocument(_prev: DocumentFormState, form: FormData): 
       db,
     );
     await audit(db, admin.id, "document.create", "document", doc.id, { name: fields.name });
+    await saveDocumentOutstations(db, doc.id, await selectedOutstations(form, db), admin.id);
     return doc.id;
   });
   revalidatePath("/admin");
@@ -100,6 +102,57 @@ export async function setDocumentStatus(form: FormData): Promise<void> {
   revalidatePath("/admin");
 }
 
+/** The outstation ids ticked on a form, keeping only real outstations. */
+async function selectedOutstations(form: FormData, db: Queryable): Promise<number[]> {
+  const valid = new Set((await listOutstations(db)).map((o) => o.id));
+  return [...new Set(form.getAll("outstation_ids").map(Number))].filter((id) => valid.has(id));
+}
+
+async function saveDocumentOutstations(db: Queryable, documentId: string, ids: number[], actorId: string) {
+  const before = await query<{ outstation_id: number }>(
+    "SELECT outstation_id FROM document_outstations WHERE document_id = $1",
+    [documentId],
+    db,
+  );
+  await query(
+    "DELETE FROM document_outstations WHERE document_id = $1 AND NOT (outstation_id = ANY($2::int[]))",
+    [documentId, ids],
+    db,
+  );
+  await query(
+    `INSERT INTO document_outstations (document_id, outstation_id)
+     SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`,
+    [documentId, ids],
+    db,
+  );
+  const old = before.map((r) => r.outstation_id).sort();
+  if (old.join() !== [...ids].sort().join()) {
+    await audit(db, actorId, "document.outstations", "document", documentId, { outstation_ids: ids });
+  }
+}
+
+export type OutstationsFormState = { error?: string; saved?: boolean };
+
+export async function setDocumentOutstations(
+  _prev: OutstationsFormState,
+  form: FormData,
+): Promise<OutstationsFormState> {
+  const admin = await assertAdmin();
+  const documentId = text(form, "document_id", 36);
+  if (!isUuid(documentId)) return { error: "Document not found." };
+  const found = await transaction(async (db) => {
+    const doc = await queryOne("SELECT 1 FROM documents WHERE id = $1 FOR UPDATE", [documentId], db);
+    if (!doc) return false;
+    await saveDocumentOutstations(db, documentId, await selectedOutstations(form, db), admin.id);
+    return true;
+  });
+  if (!found) return { error: "Document not found." };
+  revalidatePath(`/admin/documents/${documentId}`);
+  revalidatePath("/admin");
+  revalidatePath("/my");
+  return { saved: true };
+}
+
 // ---------- People ----------
 
 export type AddPeopleState = {
@@ -108,23 +161,39 @@ export type AddPeopleState = {
   problems?: ParseProblem[];
 };
 
-/** Finds or creates reader accounts for each email; returns their ids and how many were new. */
+/**
+ * Finds or creates reader accounts for each email; returns their ids and how many were new.
+ * An outstation named on a person's line wins; otherwise `defaultOutstationId` is used for new
+ * people and for existing people who don't have an outstation yet.
+ */
 async function upsertPeople(
   db: Queryable,
-  people: { name: string; email: string }[],
+  people: ParsedPerson[],
   actorId: string,
+  outstations: Outstation[],
+  defaultOutstationId: number | null,
 ): Promise<{ ids: string[]; created: number }> {
   const ids: string[] = [];
   let created = 0;
   for (const person of people) {
-    const existing = await queryOne<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1", [person.email], db);
+    const named = person.outstation ? findOutstation(person.outstation, outstations)?.id ?? null : null;
+    const existing = await queryOne<{ id: string; outstation_id: number | null }>(
+      "SELECT id, outstation_id FROM users WHERE lower(email) = $1",
+      [person.email],
+      db,
+    );
     if (existing) {
+      const next = named ?? (existing.outstation_id === null ? defaultOutstationId : null);
+      if (next !== null && next !== existing.outstation_id) {
+        await query("UPDATE users SET outstation_id = $2, updated_at = now() WHERE id = $1", [existing.id, next], db);
+        await audit(db, actorId, "user.outstation", "user", existing.id, { outstation_id: next });
+      }
       ids.push(existing.id);
       continue;
     }
     const [user] = await query<{ id: string }>(
-      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
-      [person.name, person.email],
+      "INSERT INTO users (name, email, outstation_id) VALUES ($1, $2, $3) RETURNING id",
+      [person.name, person.email, named ?? defaultOutstationId],
       db,
     );
     await audit(db, actorId, "user.create", "user", user.id, { email: person.email });
@@ -138,7 +207,10 @@ export async function addSigners(_prev: AddPeopleState, form: FormData): Promise
   const admin = await assertAdmin();
   const documentId = text(form, "document_id", 36);
   if (!isUuid(documentId)) return { error: "Document not found." };
-  const { people, problems } = parsePeopleList(text(form, "people", 500_000));
+  const outstations = await listOutstations();
+  const defaultOutstation = outstationIdFrom(form.get("outstation_id"), outstations);
+  if (defaultOutstation === undefined) return { error: "Choose an outstation from the list." };
+  const { people, problems } = parsePeopleList(text(form, "people", 500_000), outstations.map((o) => o.name));
   if (people.length === 0) {
     return { error: problems.length ? "No valid lines found." : "Add at least one person.", problems };
   }
@@ -146,10 +218,13 @@ export async function addSigners(_prev: AddPeopleState, form: FormData): Promise
   const summary = await transaction(async (db) => {
     const doc = await queryOne("SELECT 1 FROM documents WHERE id = $1 FOR UPDATE", [documentId], db);
     if (!doc) return null;
-    const { ids, created } = await upsertPeople(db, people, admin.id);
+    const { ids, created } = await upsertPeople(db, people, admin.id, outstations, defaultOutstation);
+    // People already expected through one of the document's outstations count as already listed.
     const inserted = await query(
       `INSERT INTO expected_signers (document_id, user_id)
-       SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING RETURNING user_id`,
+       SELECT $1, u FROM unnest($2::uuid[]) AS u
+        WHERE NOT EXISTS (SELECT 1 FROM document_signers ds WHERE ds.document_id = $1 AND ds.user_id = u)
+       ON CONFLICT DO NOTHING RETURNING user_id`,
       [documentId, ids],
       db,
     );
@@ -209,11 +284,16 @@ export async function addMeAsSigner(form: FormData): Promise<void> {
 
 export async function addPeople(_prev: AddPeopleState, form: FormData): Promise<AddPeopleState> {
   const admin = await assertAdmin();
-  const { people, problems } = parsePeopleList(text(form, "people", 500_000));
+  const outstations = await listOutstations();
+  const defaultOutstation = outstationIdFrom(form.get("outstation_id"), outstations);
+  if (defaultOutstation === undefined) return { error: "Choose an outstation from the list." };
+  const { people, problems } = parsePeopleList(text(form, "people", 500_000), outstations.map((o) => o.name));
   if (people.length === 0) {
     return { error: problems.length ? "No valid lines found." : "Add at least one person.", problems };
   }
-  const { ids, created } = await transaction((db) => upsertPeople(db, people, admin.id));
+  const { ids, created } = await transaction((db) =>
+    upsertPeople(db, people, admin.id, outstations, defaultOutstation),
+  );
   revalidatePath("/admin/people");
   return { summary: { added: created, alreadyListed: ids.length - created, newAccounts: created }, problems };
 }
@@ -226,23 +306,32 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
   const name = text(form, "name", 200);
   const email = text(form, "email", 254).toLowerCase();
   const employeeId = optionalText(form, "employee_id", 100);
+  const outstationId = outstationIdFrom(form.get("outstation_id"), await listOutstations());
   if (!isUuid(id)) return { error: "Person not found." };
+  if (outstationId === undefined) return { error: "Choose an outstation from the list." };
   if (!name) return { error: "Enter a name." };
   if (!isEmail(email)) return { error: "Enter a valid email address." };
   try {
     await transaction(async (db) => {
       await query(
-        "UPDATE users SET name = $2, email = $3, employee_id = $4, updated_at = now() WHERE id = $1",
-        [id, name, email, employeeId],
+        `UPDATE users SET name = $2, email = $3, employee_id = $4, outstation_id = $5, updated_at = now()
+          WHERE id = $1`,
+        [id, name, email, employeeId, outstationId],
         db,
       );
-      await audit(db, admin.id, "user.update", "user", id, { name, email, employee_id: employeeId });
+      await audit(db, admin.id, "user.update", "user", id, {
+        name,
+        email,
+        employee_id: employeeId,
+        outstation_id: outstationId,
+      });
     });
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "Someone else already uses that email address." };
     throw err;
   }
   revalidatePath("/admin/people");
+  revalidatePath("/admin");
   return { saved: true };
 }
 

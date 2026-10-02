@@ -36,7 +36,7 @@ export default async function SignPage({
 
   const doc = await queryOne<Doc>(
     `SELECT d.id, d.name, d.description, d.version_label, d.due_date, d.location_url, d.status,
-            EXISTS (SELECT 1 FROM expected_signers es WHERE es.document_id = d.id AND es.user_id = $2) AS is_expected,
+            EXISTS (SELECT 1 FROM document_signers es WHERE es.document_id = d.id AND es.user_id = $2) AS is_expected,
             (SELECT a.acknowledged_at FROM acknowledgements a
               WHERE a.document_id = d.id AND a.user_id = $2 AND a.voided_at IS NULL) AS acknowledged_at
        FROM documents d WHERE d.link_token = $1`,

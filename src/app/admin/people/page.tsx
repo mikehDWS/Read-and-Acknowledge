@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { query } from "@/lib/db";
+import { listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 import { setRole } from "../actions";
 import { AddPeopleForm, PersonEditForm, PersonLinkButton } from "../components";
@@ -11,26 +12,40 @@ type Person = {
   name: string;
   email: string;
   employee_id: string | null;
+  outstation_id: number | null;
+  outstation: string | null;
   role: "reader" | "admin";
   has_password: boolean;
   locked: boolean;
   documents: number;
 };
 
-export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function PeoplePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; outstation?: string }>;
+}) {
   const admin = await requireAdmin("/admin/people");
-  const { q } = await searchParams;
+  const { q, outstation } = await searchParams;
   const search = q?.trim().slice(0, 200) ?? "";
+  const outstations = await listOutstations();
+  // "none" lists people without an outstation; a number lists one outstation.
+  const outstationFilter =
+    outstation === "none" ? "none" : outstations.find((o) => String(o.id) === outstation)?.id ?? null;
   const people = await query<Person>(
-    `SELECT u.id, u.name, u.email, u.employee_id, u.role,
+    `SELECT u.id, u.name, u.email, u.employee_id, u.outstation_id, o.name AS outstation, u.role,
             u.password_hash IS NOT NULL AS has_password,
             coalesce(u.locked_until > now(), false) AS locked,
-            (SELECT count(*) FROM expected_signers es WHERE es.user_id = u.id)::int AS documents
+            (SELECT count(*) FROM document_signers es WHERE es.user_id = u.id)::int AS documents
        FROM users u
-      WHERE $1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%'
+       LEFT JOIN outstations o ON o.id = u.outstation_id
+      WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')
+        AND ($2::text IS NULL
+             OR ($2 = 'none' AND u.outstation_id IS NULL)
+             OR u.outstation_id::text = $2)
       ORDER BY lower(u.name)
       LIMIT 500`,
-    [search.replace(/[\\%_]/g, (c) => `\\${c}`)],
+    [search.replace(/[\\%_]/g, (c) => `\\${c}`), outstationFilter === null ? null : String(outstationFilter)],
   );
 
   return (
@@ -41,11 +56,23 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         v1 doesn&apos;t send email, so copy the link and share it yourself.
       </p>
 
-      <form method="get" className="copy-row" role="search" style={{ margin: "16px 0" }}>
+      <form method="get" className="filters" role="search">
         <label htmlFor="q" className="visually-hidden">
           Search people
         </label>
         <input id="q" name="q" type="search" placeholder="Search by name or email" defaultValue={search} />
+        <label htmlFor="outstation-filter" className="visually-hidden">
+          Outstation
+        </label>
+        <select id="outstation-filter" name="outstation" defaultValue={outstationFilter === null ? "" : String(outstationFilter)}>
+          <option value="">All outstations</option>
+          {outstations.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+          <option value="none">No outstation</option>
+        </select>
         <button type="submit" className="secondary">
           Search
         </button>
@@ -59,6 +86,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             <thead>
               <tr>
                 <th scope="col">Name</th>
+                <th scope="col">Outstation</th>
                 <th scope="col">Account</th>
                 <th scope="col">Role</th>
                 <th scope="col">
@@ -77,6 +105,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                       {p.documents} {p.documents === 1 ? "document" : "documents"}
                     </span>
                   </td>
+                  <td>{p.outstation ?? <span className="hint">Not set</span>}</td>
                   <td>
                     {p.has_password ? (
                       <span className="badge ok">Active</span>
@@ -101,7 +130,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                     )}
                   </td>
                   <td>
-                    <PersonEditForm person={p} />
+                    <PersonEditForm person={p} outstations={outstations} />
                   </td>
                 </tr>
               ))}
@@ -114,7 +143,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         <h2 id="add-people-heading" style={{ marginTop: 0 }}>
           Add people
         </h2>
-        <AddPeopleForm />
+        <AddPeopleForm outstations={outstations} />
       </section>
     </>
   );

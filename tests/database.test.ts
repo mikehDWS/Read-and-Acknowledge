@@ -95,6 +95,38 @@ describe.skipIf(!url)("acknowledgements table", () => {
     await expectError("DELETE FROM documents WHERE id = $1", [docId], /foreign key/);
   });
 
+  it("protects the signer's outstation on a record", async () => {
+    const id = await sign();
+    await expectError("UPDATE acknowledgements SET signer_outstation = 'Humber' WHERE id = $1", [id], /voided/);
+  });
+
+  it("expects everyone at a document's outstations, including people who join later", async () => {
+    const { rows } = await client.query("SELECT id, name FROM outstations ORDER BY sort_order");
+    expect(rows.map((r) => r.name)).toEqual([
+      "Head Office", "Ferrybridge", "Tuebrook", "Stirling", "Bardon",
+      "Isle of Grain", "Humber", "Port Talbot", "Llanwern", "Milford Haven",
+    ]);
+    const ferrybridge = rows[1].id;
+    const humber = rows[6].id;
+    const expected = async () =>
+      (await client.query("SELECT user_id, individual FROM document_signers WHERE document_id = $1 ORDER BY user_id", [docId])).rows;
+
+    await client.query("INSERT INTO document_outstations (document_id, outstation_id) VALUES ($1, $2)", [docId, ferrybridge]);
+    expect(await expected()).toEqual([]);
+
+    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, ferrybridge]);
+    expect(await expected()).toEqual([{ user_id: userId, individual: false }]);
+
+    // Added by name as well: listed once, marked individual.
+    await client.query("INSERT INTO expected_signers (document_id, user_id) VALUES ($1, $2)", [docId, userId]);
+    expect(await expected()).toEqual([{ user_id: userId, individual: true }]);
+    await client.query("DELETE FROM expected_signers WHERE document_id = $1", [docId]);
+
+    // Moving to an outstation that isn't selected takes them off the list.
+    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, humber]);
+    expect(await expected()).toEqual([]);
+  });
+
   it("only accepts web links for document locations", async () => {
     await expectError("UPDATE documents SET location_url = 'javascript:alert(1)' WHERE id = $1", [docId], /check/);
   });

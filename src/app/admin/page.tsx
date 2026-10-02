@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { query } from "@/lib/db";
 import { formatDate, isOverdue } from "@/lib/format";
+import { listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Documents" };
@@ -14,17 +15,21 @@ type Row = {
   status: "open" | "closed";
   expected: number;
   signed: number;
+  outstations: string[];
 };
 
 export default async function AdminDashboard() {
   await requireAdmin("/admin");
+  const outstations = await listOutstations();
   const docs = await query<Row>(
     `SELECT d.id, d.name, d.version_label, d.due_date, d.status,
-            (SELECT count(*) FROM expected_signers es WHERE es.document_id = d.id)::int AS expected,
-            (SELECT count(*) FROM expected_signers es
+            (SELECT count(*) FROM document_signers es WHERE es.document_id = d.id)::int AS expected,
+            (SELECT count(*) FROM document_signers es
                JOIN acknowledgements a
                  ON a.document_id = es.document_id AND a.user_id = es.user_id AND a.voided_at IS NULL
-              WHERE es.document_id = d.id)::int AS signed
+              WHERE es.document_id = d.id)::int AS signed,
+            ARRAY(SELECT o.name FROM document_outstations dos JOIN outstations o ON o.id = dos.outstation_id
+                   WHERE dos.document_id = d.id ORDER BY o.sort_order, o.name) AS outstations
        FROM documents d
       ORDER BY d.status = 'closed', d.due_date NULLS LAST, d.created_at DESC`,
   );
@@ -48,6 +53,7 @@ export default async function AdminDashboard() {
             <thead>
               <tr>
                 <th scope="col">Document</th>
+                <th scope="col">Outstations</th>
                 <th scope="col">Due</th>
                 <th scope="col">Signed</th>
                 <th scope="col">Outstanding</th>
@@ -62,6 +68,15 @@ export default async function AdminDashboard() {
                     <td>
                       <Link href={`/admin/documents/${d.id}`}>{d.name}</Link>
                       {d.version_label && <span className="hint">Version {d.version_label}</span>}
+                    </td>
+                    <td>
+                      {d.outstations.length === 0 ? (
+                        <span className="hint">Named people only</span>
+                      ) : d.outstations.length === outstations.length ? (
+                        "All outstations"
+                      ) : (
+                        d.outstations.join(", ")
+                      )}
                     </td>
                     <td>
                       {d.due_date ? formatDate(d.due_date) : "—"}
@@ -102,7 +117,17 @@ export default async function AdminDashboard() {
               ))}
             </select>
           </div>
-          <div />
+          <div>
+            <label htmlFor="export-outstation">Outstation</label>
+            <select id="export-outstation" name="outstation" defaultValue="">
+              <option value="">All outstations</option>
+              {outstations.map((o) => (
+                <option key={o.id} value={o.name}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label htmlFor="from">Signed from</label>
             <input id="from" name="from" type="date" />
@@ -114,7 +139,9 @@ export default async function AdminDashboard() {
         </div>
         <div className="actions">
           <button type="submit">Download CSV</button>
-          <span className="hint">Includes voided records, marked as voided.</span>
+          <span className="hint">
+            Includes voided records, marked as voided. The outstation is the one each person was at when they signed.
+          </span>
         </div>
       </form>
     </>

@@ -10,6 +10,7 @@ type Row = {
   version_label: string | null;
   signer_name: string;
   signer_email: string;
+  signer_outstation: string | null;
   employee_id: string | null;
   acknowledged_at: Date;
   statement_text: string;
@@ -26,6 +27,7 @@ const HEADER = [
   "version",
   "name",
   "email",
+  "outstation",
   "employee_id",
   "acknowledged_at_utc",
   "statement",
@@ -47,13 +49,14 @@ export async function GET(request: NextRequest) {
   const documentId = params.get("document") ?? "";
   const from = optionalDate(params.get("from") ?? "");
   const to = optionalDate(params.get("to") ?? "");
+  const outstation = params.get("outstation")?.trim().slice(0, 200) || null;
   if ((documentId && !isUuid(documentId)) || from === undefined || to === undefined) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
   // Dates are whole UTC days; "to" is inclusive.
   const rows = await query<Row>(
-    `SELECT a.id, a.document_name, a.version_label, a.signer_name, a.signer_email, u.employee_id,
+    `SELECT a.id, a.document_name, a.version_label, a.signer_name, a.signer_email, a.signer_outstation, u.employee_id,
             a.acknowledged_at, a.statement_text, a.ip_address, a.user_agent,
             a.voided_at, v.email AS voided_by, a.void_reason
        FROM acknowledgements a
@@ -62,8 +65,9 @@ export async function GET(request: NextRequest) {
       WHERE ($1::uuid IS NULL OR a.document_id = $1::uuid)
         AND ($2::date IS NULL OR a.acknowledged_at >= $2::date)
         AND ($3::date IS NULL OR a.acknowledged_at < $3::date + 1)
+        AND ($4::text IS NULL OR lower(a.signer_outstation) = lower($4))
       ORDER BY a.acknowledged_at`,
-    [documentId || null, from, to],
+    [documentId || null, from, to, outstation],
   );
 
   const csv = toCsv(
@@ -74,6 +78,7 @@ export async function GET(request: NextRequest) {
       r.version_label,
       r.signer_name,
       r.signer_email,
+      r.signer_outstation,
       r.employee_id,
       r.acknowledged_at,
       r.statement_text,

@@ -6,15 +6,90 @@ import {
   addSigners,
   createDocument,
   createPersonLink,
+  setDocumentOutstations,
   updateDocument,
   updatePerson,
   voidAcknowledgement,
   type AccountLinkState,
   type AddPeopleState,
   type DocumentFormState,
+  type OutstationsFormState,
   type PersonFormState,
   type VoidState,
 } from "./actions";
+
+type Outstation = { id: number; name: string };
+
+function OutstationChecks({ outstations, selected }: { outstations: Outstation[]; selected: number[] }) {
+  return (
+    <div className="check-grid">
+      {outstations.map((o) => (
+        <label key={o.id} className="check-item" htmlFor={`os-${o.id}`}>
+          <input id={`os-${o.id}`} type="checkbox" name="outstation_ids" value={o.id} defaultChecked={selected.includes(o.id)} />
+          {o.name}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function OutstationSelect({
+  id,
+  outstations,
+  defaultValue,
+  emptyLabel,
+}: {
+  id: string;
+  outstations: Outstation[];
+  defaultValue?: number | null;
+  emptyLabel: string;
+}) {
+  return (
+    <select id={id} name="outstation_id" defaultValue={defaultValue ?? ""}>
+      <option value="">{emptyLabel}</option>
+      {outstations.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Which outstations need to acknowledge a document. */
+export function OutstationsForm({
+  documentId,
+  outstations,
+  selected,
+}: {
+  documentId: string;
+  outstations: Outstation[];
+  selected: number[];
+}) {
+  const [state, action, pending] = useActionState<OutstationsFormState, FormData>(setDocumentOutstations, {});
+  return (
+    <form action={action}>
+      <input type="hidden" name="document_id" value={documentId} />
+      <OutstationChecks outstations={outstations} selected={selected} />
+      {state.error && (
+        <p className="notice bad" role="alert">
+          {state.error}
+        </p>
+      )}
+      {state.saved && (
+        <p className="notice ok" role="status">
+          Outstations saved.
+        </p>
+      )}
+      <div className="actions">
+        <button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Save outstations"}
+        </button>
+        <span className="hint">Everyone at a ticked outstation needs to sign, including people who join it later.</span>
+      </div>
+    </form>
+  );
+}
 
 export function CopyField({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -51,7 +126,7 @@ type DocumentValues = {
   location_url: string | null;
 };
 
-export function DocumentForm({ doc }: { doc?: DocumentValues }) {
+export function DocumentForm({ doc, outstations }: { doc?: DocumentValues; outstations?: Outstation[] }) {
   const [state, action, pending] = useActionState<DocumentFormState, FormData>(
     doc?.id ? updateDocument : createDocument,
     {},
@@ -100,6 +175,15 @@ export function DocumentForm({ doc }: { doc?: DocumentValues }) {
         placeholder="https://"
         defaultValue={doc?.location_url ?? ""}
       />
+      {!doc?.id && outstations && outstations.length > 0 && (
+        <fieldset className="fieldset">
+          <legend>
+            Outstations that need to acknowledge this{" "}
+            <span className="hint">Everyone at these outstations will need to sign. You can also add individual people next.</span>
+          </legend>
+          <OutstationChecks outstations={outstations} selected={[]} />
+        </fieldset>
+      )}
       <div className="actions">
         <button type="submit" disabled={pending}>
           {pending ? "Saving…" : doc?.id ? "Save changes" : "Create document"}
@@ -109,7 +193,7 @@ export function DocumentForm({ doc }: { doc?: DocumentValues }) {
   );
 }
 
-export function AddPeopleForm({ documentId }: { documentId?: string }) {
+export function AddPeopleForm({ documentId, outstations = [] }: { documentId?: string; outstations?: Outstation[] }) {
   const [state, action, pending] = useActionState<AddPeopleState, FormData>(
     documentId ? addSigners : addPeople,
     {},
@@ -125,11 +209,21 @@ export function AddPeopleForm({ documentId }: { documentId?: string }) {
       <label htmlFor="people">
         People
         <span className="hint">
-          One per line: <code>Name, email</code>. You can paste two columns (name and email) straight from a
-          spreadsheet. New email addresses get a reader account.
+          One per line: <code>Name, email</code>, optionally with an outstation:{" "}
+          <code>Name, email, Ferrybridge</code>. You can paste columns straight from a spreadsheet. New email
+          addresses get a reader account.
         </span>
       </label>
-      <textarea id="people" name="people" placeholder={"Sam Patel, sam.patel@example.com\nAlex Jones, alex.jones@example.com"} />
+      <textarea id="people" name="people" placeholder={"Sam Patel, sam.patel@example.com\nAlex Jones, alex.jones@example.com, Humber"} />
+      {outstations.length > 0 && (
+        <>
+          <label htmlFor="people-outstation">
+            Outstation{" "}
+            <span className="hint">For anyone without an outstation yet. An outstation on a line takes priority.</span>
+          </label>
+          <OutstationSelect id="people-outstation" outstations={outstations} emptyLabel="Don't set an outstation" />
+        </>
+      )}
       {state.error && (
         <p className="notice bad" role="alert">
           {state.error}
@@ -187,9 +281,15 @@ export function PersonLinkButton({ userId, hasPassword }: { userId: string; hasP
   );
 }
 
-type PersonValues = { id: string; name: string; email: string; employee_id: string | null };
+type PersonValues = {
+  id: string;
+  name: string;
+  email: string;
+  employee_id: string | null;
+  outstation_id: number | null;
+};
 
-export function PersonEditForm({ person }: { person: PersonValues }) {
+export function PersonEditForm({ person, outstations }: { person: PersonValues; outstations: Outstation[] }) {
   const [state, action, pending] = useActionState<PersonFormState, FormData>(updatePerson, {});
   return (
     <details>
@@ -204,6 +304,13 @@ export function PersonEditForm({ person }: { person: PersonValues }) {
           Employee ID <span className="hint">Optional. Never shown to other readers.</span>
         </label>
         <input id={`emp-${person.id}`} name="employee_id" type="text" defaultValue={person.employee_id ?? ""} />
+        <label htmlFor={`os-${person.id}`}>Outstation</label>
+        <OutstationSelect
+          id={`os-${person.id}`}
+          outstations={outstations}
+          defaultValue={person.outstation_id}
+          emptyLabel="No outstation"
+        />
         {state.error && (
           <p className="notice bad" role="alert">
             {state.error}

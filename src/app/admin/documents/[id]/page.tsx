@@ -4,11 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { query, queryOne } from "@/lib/db";
 import { formatDate, formatDateTime, isOverdue } from "@/lib/format";
+import { listOutstations } from "@/lib/outstations";
 import { appBaseUrl } from "@/lib/request";
 import { requireAdmin } from "@/lib/session";
 import { isUuid } from "@/lib/validation";
 import { addMeAsSigner, removeSigner, setDocumentStatus } from "../../actions";
-import { AddPeopleForm, CopyField, DocumentForm, PersonLinkButton, VoidForm } from "../../components";
+import { AddPeopleForm, CopyField, DocumentForm, OutstationsForm, PersonLinkButton, VoidForm } from "../../components";
 
 export const metadata: Metadata = { title: "Document" };
 
@@ -30,12 +31,16 @@ type Signer = {
   email: string;
   has_password: boolean;
   acknowledged_at: Date | null;
+  outstation: string | null;
+  individual: boolean;
+  via_outstation: boolean;
 };
 
 type Ack = {
   id: string;
   signer_name: string;
   signer_email: string;
+  signer_outstation: string | null;
   version_label: string | null;
   acknowledged_at: Date;
   ip_address: string | null;
@@ -56,26 +61,47 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
   );
   if (!doc) notFound();
 
-  const [signers, acks] = await Promise.all([
+  const [signers, acks, outstations, selectedRows] = await Promise.all([
     query<Signer>(
-      `SELECT u.id, u.name, u.email, u.password_hash IS NOT NULL AS has_password, a.acknowledged_at
-         FROM expected_signers es
-         JOIN users u ON u.id = es.user_id
+      `SELECT u.id, u.name, u.email, u.password_hash IS NOT NULL AS has_password, a.acknowledged_at,
+              o.name AS outstation, ds.individual,
+              EXISTS (SELECT 1 FROM document_outstations dos
+                       WHERE dos.document_id = ds.document_id AND dos.outstation_id = u.outstation_id) AS via_outstation
+         FROM document_signers ds
+         JOIN users u ON u.id = ds.user_id
+         LEFT JOIN outstations o ON o.id = u.outstation_id
          LEFT JOIN acknowledgements a
-                ON a.document_id = es.document_id AND a.user_id = es.user_id AND a.voided_at IS NULL
-        WHERE es.document_id = $1
-        ORDER BY a.acknowledged_at IS NOT NULL, lower(u.name)`,
+                ON a.document_id = ds.document_id AND a.user_id = ds.user_id AND a.voided_at IS NULL
+        WHERE ds.document_id = $1
+        ORDER BY a.acknowledged_at IS NOT NULL, o.sort_order NULLS LAST, lower(u.name)`,
       [id],
     ),
     query<Ack>(
-      `SELECT a.id, a.signer_name, a.signer_email, a.version_label, a.acknowledged_at, a.ip_address,
+      `SELECT a.id, a.signer_name, a.signer_email, a.signer_outstation, a.version_label, a.acknowledged_at, a.ip_address,
               a.voided_at, a.void_reason, v.name AS voided_by_name
          FROM acknowledgements a LEFT JOIN users v ON v.id = a.voided_by
         WHERE a.document_id = $1
         ORDER BY a.acknowledged_at DESC`,
       [id],
     ),
+    listOutstations(),
+    query<{ outstation_id: number }>("SELECT outstation_id FROM document_outstations WHERE document_id = $1", [id]),
   ]);
+  const selected = selectedRows.map((r) => r.outstation_id);
+
+  // Signed and outstanding per outstation, for the people currently expected.
+  const byOutstation = new Map<string, { signed: number; total: number }>();
+  for (const s of signers) {
+    const key = s.outstation ?? "No outstation";
+    const row = byOutstation.get(key) ?? { signed: 0, total: 0 };
+    row.total += 1;
+    if (s.acknowledged_at) row.signed += 1;
+    byOutstation.set(key, row);
+  }
+  const outstationOrder = [...outstations.map((o) => o.name), "No outstation"];
+  const summary = [...byOutstation.entries()].sort(
+    ([a], [b]) => outstationOrder.indexOf(a) - outstationOrder.indexOf(b),
+  );
 
   const signLink = `${appBaseUrl(await headers())}/sign/${doc.link_token}`;
   const signed = signers.filter((s) => s.acknowledged_at).length;
@@ -153,15 +179,51 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
         )}
       </section>
 
+      <section className="card" aria-labelledby="outstations-heading">
+        <h2 id="outstations-heading" style={{ marginTop: 0 }}>
+          Outstations that need to acknowledge this
+        </h2>
+        <OutstationsForm documentId={doc.id} outstations={outstations} selected={selected} />
+      </section>
+
+      {summary.length > 0 && (
+        <>
+          <h2>Progress by outstation</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Outstation</th>
+                  <th scope="col">Signed</th>
+                  <th scope="col">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.map(([name, row]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td>
+                      {row.signed} of {row.total}
+                    </td>
+                    <td>{row.total - row.signed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       <h2>People expected to sign ({signers.length})</h2>
       {signers.length === 0 ? (
-        <p>No one yet. Add people below.</p>
+        <p>No one yet. Tick the outstations above, or add people below.</p>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th scope="col">Name</th>
+                <th scope="col">Outstation</th>
                 <th scope="col">Status</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
@@ -174,6 +236,10 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                   <td>
                     {s.name}
                     <span className="hint">{s.email}</span>
+                  </td>
+                  <td>
+                    {s.outstation ?? <span className="hint">Not set</span>}
+                    {!s.via_outstation && <span className="hint">Added by name</span>}
                   </td>
                   <td>
                     {s.acknowledged_at ? (
@@ -191,13 +257,17 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                     )}
                   </td>
                   <td>
-                    <form action={removeSigner}>
-                      <input type="hidden" name="document_id" value={doc.id} />
-                      <input type="hidden" name="user_id" value={s.id} />
-                      <button type="submit" className="link-button" aria-label={`Remove ${s.name} from this document`}>
-                        Remove
-                      </button>
-                    </form>
+                    {s.via_outstation ? (
+                      <span className="hint">Via {s.outstation}</span>
+                    ) : (
+                      <form action={removeSigner}>
+                        <input type="hidden" name="document_id" value={doc.id} />
+                        <input type="hidden" name="user_id" value={s.id} />
+                        <button type="submit" className="link-button" aria-label={`Remove ${s.name} from this document`}>
+                          Remove
+                        </button>
+                      </form>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -208,9 +278,10 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
 
       <section className="card" aria-labelledby="add-heading">
         <h2 id="add-heading" style={{ marginTop: 0 }}>
-          Add people
+          Add individual people
         </h2>
-        <AddPeopleForm documentId={doc.id} />
+        <p className="hint">For people outside the ticked outstations, or anyone without an outstation.</p>
+        <AddPeopleForm documentId={doc.id} outstations={outstations} />
       </section>
 
       <h2>Acknowledgement records ({acks.length})</h2>
@@ -234,6 +305,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                   <td>
                     {a.signer_name}
                     <span className="hint">{a.signer_email}</span>
+                    {a.signer_outstation && <span className="hint">{a.signer_outstation}</span>}
                   </td>
                   <td>{formatDateTime(a.acknowledged_at)}</td>
                   <td>{a.version_label ?? "—"}</td>

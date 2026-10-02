@@ -81,6 +81,10 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 **Admins** (compliance, HR, legal or operations staff)
 
 - Add a document by name, with optional description, version label, due date and link to where it's held.
+- Choose which **outstations** (maintenance teams) need to acknowledge a document. Everyone at a ticked
+  outstation is expected to sign, including people who join it later. The outstations are Head Office,
+  Ferrybridge, Tuebrook, Stirling, Bardon, Isle of Grain, Humber, Port Talbot, Llanwern and Milford Haven.
+- See progress by outstation on each document, and filter people and CSV exports by outstation.
 - Add the people expected to sign, typed in or pasted straight from a spreadsheet (`Name, email`, two
   tab-separated columns in either order, or `Name <email>`). New email addresses get a reader account.
 - Copy the document's sign link and share it themselves.
@@ -90,6 +94,8 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Export acknowledgement records to CSV, filtered by document and date range.
 - Acknowledge documents themselves: **Add me to this list** on a document's page (or on its sign
   page), then sign it like anyone else. Their documents also appear under **My documents**.
+- Give each person an outstation when adding them (for the whole batch, or per line, e.g.
+  `Sam Patel, sam@example.com, Ferrybridge`), and change it later from the People page.
 - Manage people: edit names, emails and employee IDs, make or remove admins, and create
   set-password or reset links.
 
@@ -115,7 +121,7 @@ Other choices worth knowing:
 - Acknowledgements are **append-only, enforced by the database**: a trigger blocks deletes, truncates
   and edits. The only change allowed is voiding a live record once, with a reason, and who voided it.
   A partial unique index allows one live acknowledgement per person per document.
-- Each record stores the signer's name and email, document name, version label, the exact statement
+- Each record stores the signer's name, email and outstation at the time, document name, version label, the exact statement
   text, timestamp, IP address and browser user agent.
 - Admin actions (creating documents, adding and removing people, role changes, voids, account links)
   are written to an `audit_log` table.
