@@ -21,6 +21,8 @@ services:
       APP_URL: http://localhost:3000
       # Plain http on localhost: don't mark the session cookie Secure.
       COOKIE_SECURE: "false"
+      # Reminder emails are printed to the app's log in the local trial instead of being sent.
+      MAIL_TRANSPORT: log
     ports:
       - "3000:3000"
     depends_on:

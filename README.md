@@ -74,8 +74,8 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Sign in with their own account (email and password).
 - See **My documents**: everything they've been asked to sign, with due dates and status.
 - Open a document's link, see its name, description, version and an optional link to where it's held,
-  then sign against *"I am signing to confirm I understand and will apply the contents of the document
-  being briefed."* and press **Confirm**. They draw their signature with a finger, stylus or mouse, or
+  then sign against *"Staff are signing to confirm they understand and will apply the contents of the
+  document"* and press **Confirm**. They draw their signature with a finger, stylus or mouse, or
   type their name instead (the record shows it was typed). Confirm stays disabled until they've signed.
 - See a confirmation with the date and time. They can't sign the same document twice, or undo it.
 
@@ -94,6 +94,10 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
   get a **My team** page showing, for each open document, who in their departments has signed and who
   still needs to, with the sign link to chase them. They see sign status only, not signatures, and
   can't open the admin pages unless they're also an admin.
+- **Weekly reminders**: every Monday at 07:00 UTC (08:00 UK summer time), each manager with outstanding
+  signatures is emailed who in their departments still needs to sign, with the sign links and a link
+  to **My team**. A manager gets at most one a week. The **Reminders** page previews each manager's
+  email and has **Send reminders now**.
 - Add the people expected to sign, typed in or pasted straight from a spreadsheet (`Name, email`, two
   tab-separated columns in either order, or `Name <email>`). New email addresses get a reader account.
 - Copy the document's sign link and share it themselves.
@@ -171,6 +175,11 @@ document's sign link.
 | `APP_URL` | Public base URL used in the sign and set-password links admins copy |
 | `APP_TIME_ZONE` | Optional. Time zone for displayed times and due dates (default `Europe/London`) |
 | `SETUP_CODE` | Code needed on `/setup` to create the first admin when you have no command line (e.g. on Vercel) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | The mail server reminders are sent through, e.g. `smtp.office365.com`, port `587` |
+| `MAIL_FROM` | Who reminders come from, e.g. `Read and Acknowledge <acknowledge@example.com>` |
+| `SMTP_SECURE` | Optional. `true` for port 465; otherwise STARTTLS is used |
+| `MAIL_TRANSPORT` | Optional. `log` prints emails to the server log instead of sending them (for trials) |
+| `CRON_SECRET` | A long random phrase that protects the weekly reminder job. Vercel sends it automatically; another scheduler calls `GET /api/cron/manager-reminders` with `Authorization: Bearer <CRON_SECRET>` |
 | `COOKIE_SECURE` | Optional. Set to `false` only for a plain-http local trial; secure cookies are on by default in production |
 
 ## Tests

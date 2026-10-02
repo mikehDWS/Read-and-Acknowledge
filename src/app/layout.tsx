@@ -33,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <>
                     <Link href="/admin">Documents</Link>
                     <Link href="/admin/people">People</Link>
+                    <Link href="/admin/reminders">Reminders</Link>
                   </>
                 )}
                 <span className="who" title={user.email}>
