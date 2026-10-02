@@ -6,6 +6,12 @@ the time, giving the organisation an audit trail.
 
 This is version 1 from the project brief: *Project Brief: Document Acknowledgement Web App*.
 
+## Microsoft Power Apps version
+
+[`power-app/`](power-app/README.md) has the same concept built on Microsoft 365: a canvas app with
+SharePoint lists and two Power Automate flows. People sign in with their existing work accounts.
+It includes a setup script, the flows step by step and every Power Fx formula.
+
 ## Put it online with Vercel
 
 [Vercel](https://vercel.com) builds the app straight from this GitHub repo and gives you a web link.
