@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { query } from "@/lib/db";
 import { formatDate, isOverdue } from "@/lib/format";
-import { listDistributionLists, listOutstations } from "@/lib/outstations";
+import { listCategories, listDistributionLists, listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Documents" };
@@ -17,13 +17,25 @@ type Row = {
   signed: number;
   outstations: string[];
   lists: string[];
+  category: string | null;
 };
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
   await requireAdmin("/admin");
-  const [outstations, lists] = await Promise.all([listOutstations(), listDistributionLists()]);
+  const { category } = await searchParams;
+  const [outstations, lists, categories, allDocs] = await Promise.all([
+    listOutstations(),
+    listDistributionLists(),
+    listCategories(),
+    query<{ id: string; name: string; version_label: string | null }>(
+      "SELECT id, name, version_label FROM documents ORDER BY lower(name)",
+    ),
+  ]);
+  // "none" shows documents without a category; a number shows one category.
+  const categoryFilter =
+    category === "none" ? "none" : categories.find((c) => String(c.id) === category)?.id ?? null;
   const docs = await query<Row>(
-    `SELECT d.id, d.name, d.version_label, d.due_date, d.status,
+    `SELECT d.id, d.name, d.version_label, d.due_date, d.status, c.name AS category,
             (SELECT count(*) FROM document_signers es WHERE es.document_id = d.id)::int AS expected,
             (SELECT count(*) FROM document_signers es
                JOIN acknowledgements a
@@ -34,8 +46,20 @@ export default async function AdminDashboard() {
             ARRAY(SELECT dl.name FROM document_distribution_lists ddl JOIN distribution_lists dl ON dl.id = ddl.list_id
                    WHERE ddl.document_id = d.id ORDER BY dl.sort_order, dl.name) AS lists
        FROM documents d
+       LEFT JOIN document_categories c ON c.id = d.category_id
+      WHERE $1::text IS NULL
+         OR ($1 = 'none' AND d.category_id IS NULL)
+         OR d.category_id::text = $1
       ORDER BY d.status = 'closed', d.due_date NULLS LAST, d.created_at DESC`,
+    [categoryFilter === null ? null : String(categoryFilter)],
   );
+  const uncategorised = await query<{ n: number }>("SELECT count(*)::int AS n FROM documents WHERE category_id IS NULL");
+  const tabs = [
+    { key: "", label: "All" },
+    ...categories.map((c) => ({ key: String(c.id), label: c.name })),
+    ...(uncategorised[0].n > 0 ? [{ key: "none", label: "No category" }] : []),
+  ];
+  const activeTab = categoryFilter === null ? "" : String(categoryFilter);
 
   return (
     <>
@@ -46,9 +70,26 @@ export default async function AdminDashboard() {
         </Link>
       </div>
 
+      <nav className="tabs" aria-label="Filter by category">
+        {tabs.map((t) => (
+          <Link
+            key={t.key || "all"}
+            href={t.key ? `/admin?category=${t.key}` : "/admin"}
+            className={t.key === activeTab ? "tab current" : "tab"}
+            aria-current={t.key === activeTab ? "page" : undefined}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+
       {docs.length === 0 ? (
         <div className="card">
-          <p>No documents yet. Create one, add the people who need to sign it, then share its link.</p>
+          <p>
+            {allDocs.length === 0
+              ? "No documents yet. Create one, choose who needs to sign it, then share its link."
+              : "No documents in this category."}
+          </p>
         </div>
       ) : (
         <div className="table-wrap" style={{ marginTop: 16 }}>
@@ -70,7 +111,10 @@ export default async function AdminDashboard() {
                   <tr key={d.id}>
                     <td>
                       <Link href={`/admin/documents/${d.id}`}>{d.name}</Link>
-                      {d.version_label && <span className="hint">Version {d.version_label}</span>}
+                      <span className="hint">
+                        {d.category ?? "No category"}
+                        {d.version_label && ` · Version ${d.version_label}`}
+                      </span>
                     </td>
                     <td>
                       {d.outstations.length === 0 && d.lists.length === 0 ? (
@@ -115,7 +159,7 @@ export default async function AdminDashboard() {
             <label htmlFor="document">Document</label>
             <select id="document" name="document" defaultValue="">
               <option value="">All documents</option>
-              {docs.map((d) => (
+              {allDocs.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                   {d.version_label ? ` (${d.version_label})` : ""}
@@ -135,6 +179,17 @@ export default async function AdminDashboard() {
             </select>
           </div>
           <div>
+            <label htmlFor="export-category">Category</label>
+            <select id="export-category" name="category" defaultValue="">
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label htmlFor="export-list">Distribution list</label>
             <select id="export-list" name="list" defaultValue="">
               <option value="">All distribution lists</option>
@@ -145,7 +200,6 @@ export default async function AdminDashboard() {
               ))}
             </select>
           </div>
-          <div />
           <div>
             <label htmlFor="from">Signed from</label>
             <input id="from" name="from" type="date" />

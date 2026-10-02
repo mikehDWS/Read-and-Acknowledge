@@ -147,3 +147,7 @@ td form { display: inline; margin: 0; }
 .filters select { width: auto; }
 .group-label { font-weight: 600; margin: 16px 0 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--border); }
+.tab { padding: 8px 14px; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.current { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }

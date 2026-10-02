@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { query, queryOne } from "@/lib/db";
 import { formatDate, formatDateTime, isOverdue } from "@/lib/format";
-import { listDistributionLists, listOutstations } from "@/lib/outstations";
+import { listCategories, listDistributionLists, listOutstations } from "@/lib/outstations";
 import { appBaseUrl } from "@/lib/request";
 import { requireAdmin } from "@/lib/session";
 import { isUuid } from "@/lib/validation";
@@ -23,6 +23,8 @@ type Doc = {
   link_token: string;
   status: "open" | "closed";
   created_at: Date;
+  category_id: number | null;
+  category: string | null;
 };
 
 type Signer = {
@@ -58,13 +60,15 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
   const admin = await requireAdmin(`/admin/documents/${id}`);
 
   const doc = await queryOne<Doc>(
-    `SELECT id, name, description, version_label, due_date, location_url, link_token, status, created_at
-       FROM documents WHERE id = $1`,
+    `SELECT d.id, d.name, d.description, d.version_label, d.due_date, d.location_url, d.link_token, d.status,
+            d.created_at, d.category_id, c.name AS category
+       FROM documents d LEFT JOIN document_categories c ON c.id = d.category_id
+      WHERE d.id = $1`,
     [id],
   );
   if (!doc) notFound();
 
-  const [signers, acks, outstations, selectedRows, lists, selectedListRows] = await Promise.all([
+  const [signers, acks, outstations, selectedRows, lists, selectedListRows, categories] = await Promise.all([
     query<Signer>(
       `SELECT u.id, u.name, u.email, u.password_hash IS NOT NULL AS has_password, a.acknowledged_at,
               o.name AS outstation, ds.individual,
@@ -97,6 +101,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
     query<{ outstation_id: number }>("SELECT outstation_id FROM document_outstations WHERE document_id = $1", [id]),
     listDistributionLists(),
     query<{ list_id: number }>("SELECT list_id FROM document_distribution_lists WHERE document_id = $1", [id]),
+    listCategories(),
   ]);
   const selected = selectedRows.map((r) => r.outstation_id);
   const selectedLists = selectedListRows.map((r) => r.list_id);
@@ -140,7 +145,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
         </span>
       </h1>
       <p className="lead">
-        {signed} of {signers.length} signed
+        {doc.category ?? "No category"} · {signed} of {signers.length} signed
         {doc.version_label && ` · Version ${doc.version_label}`}
         {doc.due_date && ` · Due ${formatDate(doc.due_date)}`}
         {overdue && signed < signers.length && " · Overdue"}
@@ -404,7 +409,9 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
             version_label: doc.version_label,
             due_date: doc.due_date,
             location_url: doc.location_url,
+            category_id: doc.category_id,
           }}
+          categories={categories}
         />
         <p className="hint">
           Past acknowledgements keep the name and version they were signed under.

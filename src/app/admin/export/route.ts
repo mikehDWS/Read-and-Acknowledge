@@ -7,6 +7,7 @@ import { isUuid, optionalDate } from "@/lib/validation";
 type Row = {
   id: string;
   document_name: string;
+  document_category: string | null;
   version_label: string | null;
   signer_name: string;
   signer_email: string;
@@ -25,6 +26,7 @@ type Row = {
 const HEADER = [
   "acknowledgement_id",
   "document",
+  "category",
   "version",
   "name",
   "email",
@@ -53,13 +55,14 @@ export async function GET(request: NextRequest) {
   const to = optionalDate(params.get("to") ?? "");
   const outstation = params.get("outstation")?.trim().slice(0, 200) || null;
   const list = params.get("list")?.trim().slice(0, 200) || null;
+  const category = params.get("category")?.trim().slice(0, 200) || null;
   if ((documentId && !isUuid(documentId)) || from === undefined || to === undefined) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
   // Dates are whole UTC days; "to" is inclusive.
   const rows = await query<Row>(
-    `SELECT a.id, a.document_name, a.version_label, a.signer_name, a.signer_email, a.signer_outstation, a.signer_distribution_lists, u.employee_id,
+    `SELECT a.id, a.document_name, a.document_category, a.version_label, a.signer_name, a.signer_email, a.signer_outstation, a.signer_distribution_lists, u.employee_id,
             a.acknowledged_at, a.statement_text, a.ip_address, a.user_agent,
             a.voided_at, v.email AS voided_by, a.void_reason
        FROM acknowledgements a
@@ -70,8 +73,9 @@ export async function GET(request: NextRequest) {
         AND ($3::date IS NULL OR a.acknowledged_at < $3::date + 1)
         AND ($4::text IS NULL OR lower(a.signer_outstation) = lower($4))
         AND ($5::text IS NULL OR lower($5) = ANY (string_to_array(lower(a.signer_distribution_lists), ', ')))
+        AND ($6::text IS NULL OR lower(a.document_category) = lower($6))
       ORDER BY a.acknowledged_at`,
-    [documentId || null, from, to, outstation, list],
+    [documentId || null, from, to, outstation, list, category],
   );
 
   const csv = toCsv(
@@ -79,6 +83,7 @@ export async function GET(request: NextRequest) {
     rows.map((r) => [
       r.id,
       r.document_name,
+      r.document_category,
       r.version_label,
       r.signer_name,
       r.signer_email,

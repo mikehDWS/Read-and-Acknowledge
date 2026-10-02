@@ -33,3 +33,9 @@ export function idsFrom(form: FormData, field: string, valid: { id: number }[]):
   const known = new Set(valid.map((v) => v.id));
   return [...new Set(form.getAll(field).map(Number))].filter((id) => known.has(id));
 }
+
+export type DocumentCategory = { id: number; name: string };
+
+export function listCategories(db?: Queryable): Promise<DocumentCategory[]> {
+  return query<DocumentCategory>("SELECT id, name FROM document_categories ORDER BY sort_order, name", [], db);
+}

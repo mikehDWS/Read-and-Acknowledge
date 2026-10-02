@@ -15,6 +15,7 @@ type Doc = {
   name: string;
   description: string | null;
   version_label: string | null;
+  category: string | null;
   due_date: string | null;
   location_url: string | null;
   status: "open" | "closed";
@@ -35,7 +36,9 @@ export default async function SignPage({
   const user = await requireUser(`/sign/${token}`);
 
   const doc = await queryOne<Doc>(
-    `SELECT d.id, d.name, d.description, d.version_label, d.due_date, d.location_url, d.status,
+    `SELECT d.id, d.name, d.description, d.version_label,
+            (SELECT c.name FROM document_categories c WHERE c.id = d.category_id) AS category,
+            d.due_date, d.location_url, d.status,
             EXISTS (SELECT 1 FROM document_signers es WHERE es.document_id = d.id AND es.user_id = $2) AS is_expected,
             (SELECT a.acknowledged_at FROM acknowledgements a
               WHERE a.document_id = d.id AND a.user_id = $2 AND a.voided_at IS NULL) AS acknowledged_at
@@ -48,6 +51,12 @@ export default async function SignPage({
     <div className="card narrow" style={{ maxWidth: 640 }}>
       <h1>{doc.name}</h1>
       <dl className="meta">
+        {doc.category && (
+          <>
+            <dt>Category</dt>
+            <dd>{doc.category}</dd>
+          </>
+        )}
         {doc.version_label && (
           <>
             <dt>Version</dt>

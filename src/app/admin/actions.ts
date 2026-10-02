@@ -9,6 +9,7 @@ import { isUniqueViolation, query, queryOne, transaction, type Queryable } from 
 import {
   findOutstation,
   idsFrom,
+  listCategories,
   listDistributionLists,
   listOutstations,
   outstationIdFrom,
@@ -31,11 +32,14 @@ type DocumentFields = {
   version_label: string | null;
   due_date: string | null;
   location_url: string | null;
+  category_id: number;
 };
 
-function readDocumentFields(form: FormData): DocumentFields | string {
+async function readDocumentFields(form: FormData): Promise<DocumentFields | string> {
   const name = text(form, "name", 200);
   if (!name) return "Give the document a name.";
+  const categoryId = Number(text(form, "category_id", 10));
+  if (!(await listCategories()).some((c) => c.id === categoryId)) return "Choose a category.";
   const due = optionalDate(text(form, "due_date", 10));
   if (due === undefined) return "Enter the due date as a valid date.";
   const url = optionalWebUrl(text(form, "location_url", 2000));
@@ -46,19 +50,29 @@ function readDocumentFields(form: FormData): DocumentFields | string {
     version_label: optionalText(form, "version_label", 100),
     due_date: due,
     location_url: url,
+    category_id: categoryId,
   };
 }
 
 export async function createDocument(_prev: DocumentFormState, form: FormData): Promise<DocumentFormState> {
   const admin = await assertAdmin();
-  const fields = readDocumentFields(form);
+  const fields = await readDocumentFields(form);
   if (typeof fields === "string") return { error: fields };
 
   const id = await transaction(async (db) => {
     const [doc] = await query<{ id: string }>(
-      `INSERT INTO documents (name, description, version_label, due_date, location_url, link_token, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [fields.name, fields.description, fields.version_label, fields.due_date, fields.location_url, newToken(), admin.id],
+      `INSERT INTO documents (name, description, version_label, due_date, location_url, category_id, link_token, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        fields.name,
+        fields.description,
+        fields.version_label,
+        fields.due_date,
+        fields.location_url,
+        fields.category_id,
+        newToken(),
+        admin.id,
+      ],
       db,
     );
     await audit(db, admin.id, "document.create", "document", doc.id, { name: fields.name });
@@ -73,15 +87,15 @@ export async function updateDocument(_prev: DocumentFormState, form: FormData): 
   const admin = await assertAdmin();
   const id = text(form, "id", 36);
   if (!isUuid(id)) return { error: "Document not found." };
-  const fields = readDocumentFields(form);
+  const fields = await readDocumentFields(form);
   if (typeof fields === "string") return { error: fields };
 
   const updated = await transaction(async (db) => {
     const rows = await query(
       `UPDATE documents SET name = $2, description = $3, version_label = $4, due_date = $5,
-              location_url = $6, updated_at = now()
+              location_url = $6, category_id = $7, updated_at = now()
         WHERE id = $1 RETURNING id`,
-      [id, fields.name, fields.description, fields.version_label, fields.due_date, fields.location_url],
+      [id, fields.name, fields.description, fields.version_label, fields.due_date, fields.location_url, fields.category_id],
       db,
     );
     if (rows.length) await audit(db, admin.id, "document.update", "document", id, fields);

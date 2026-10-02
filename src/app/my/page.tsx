@@ -10,6 +10,7 @@ type Row = {
   id: string;
   name: string;
   version_label: string | null;
+  category: string | null;
   due_date: string | null;
   link_token: string;
   status: "open" | "closed";
@@ -19,9 +20,10 @@ type Row = {
 export default async function MyDocumentsPage() {
   const user = await requireUser("/my");
   const rows = await query<Row>(
-    `SELECT d.id, d.name, d.version_label, d.due_date, d.link_token, d.status, a.acknowledged_at
+    `SELECT d.id, d.name, d.version_label, c.name AS category, d.due_date, d.link_token, d.status, a.acknowledged_at
        FROM document_signers es
        JOIN documents d ON d.id = es.document_id
+       LEFT JOIN document_categories c ON c.id = d.category_id
        LEFT JOIN acknowledgements a
               ON a.document_id = d.id AND a.user_id = es.user_id AND a.voided_at IS NULL
       WHERE es.user_id = $1
@@ -55,7 +57,11 @@ export default async function MyDocumentsPage() {
                 <tr key={r.id}>
                   <td>
                     <Link href={`/sign/${r.link_token}`}>{r.name}</Link>
-                    {r.version_label && <span className="hint">Version {r.version_label}</span>}
+                    {(r.category || r.version_label) && (
+                      <span className="hint">
+                        {[r.category, r.version_label && `Version ${r.version_label}`].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </td>
                   <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
                   <td>

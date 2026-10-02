@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listDistributionLists, listOutstations } from "@/lib/outstations";
+import { listCategories, listDistributionLists, listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 import { DocumentForm } from "../../components";
 
@@ -8,7 +8,11 @@ export const metadata: Metadata = { title: "New document" };
 
 export default async function NewDocumentPage() {
   await requireAdmin("/admin/documents/new");
-  const [outstations, lists] = await Promise.all([listOutstations(), listDistributionLists()]);
+  const [outstations, lists, categories] = await Promise.all([
+    listOutstations(),
+    listDistributionLists(),
+    listCategories(),
+  ]);
   return (
     <>
       <p>
@@ -20,7 +24,7 @@ export default async function NewDocumentPage() {
         wherever it&apos;s held today.
       </p>
       <div className="card">
-        <DocumentForm outstations={outstations} lists={lists} />
+        <DocumentForm outstations={outstations} lists={lists} categories={categories} />
       </div>
     </>
   );

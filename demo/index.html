@@ -151,6 +151,10 @@ details[open] summary { margin-bottom: 4px; }
 .fieldset legend { font-weight: 600; padding: 0 4px; }
 .group-label { font-weight: 600; margin: 16px 0 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--border); }
+.tabs .tab { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--muted); font-weight: 400; padding: 8px 14px; margin-bottom: -1px; }
+.tabs .tab:hover:not(:disabled) { background: none; color: var(--text); }
+.tabs .tab.current { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 0.95rem; max-width: calc(100% - 32px); }
 </style>
@@ -195,6 +199,7 @@ details[open] summary { margin-bottom: 4px; }
   };
 
   // ---------- sample data ----------
+  const CATEGORIES = ["Customer", "Internal Engineering", "Internal Health and Safety"];
   const LISTS = ["Engineering", "Purchasing", "Health and Safety", "Operations Managers"];
   const OUTSTATIONS = ["Head Office", "Ferrybridge", "Tuebrook", "Stirling", "Bardon", "Isle of Grain", "Humber", "Port Talbot", "Llanwern", "Milford Haven"];
   function seed() {
@@ -208,14 +213,14 @@ details[open] summary { margin-bottom: 4px; }
       { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "", outstation: "Port Talbot", lists: [] },
     ];
     const docs = [
-      { id: "d-infosec", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), outstations: ["Ferrybridge", "Humber", "Port Talbot"], signers: [], lists: [] },
-      { id: "d-hs", name: "Health and Safety Procedures", description: "Site safety rules, PPE requirements and what to do in an emergency.", version: "2026.1", due: isoPlusDays(12), url: "https://intranet.example.com/policies/health-and-safety", status: "open", token: token(), outstations: ["Ferrybridge", "Humber"], lists: ["Health and Safety"], signers: [] },
-      { id: "d-conduct", name: "Code of Conduct", description: "The standards of behaviour we expect from everyone.", version: "1.4", due: isoPlusDays(-5), url: "", status: "open", token: token(), outstations: ["Ferrybridge"], lists: [], signers: ["u-tom", "u-mia"] },
-      { id: "d-expenses", name: "Expenses Policy", description: "What you can claim and how.", version: "2025", due: isoPlusDays(-40), url: "", status: "closed", token: token(), outstations: ["Humber"], lists: [], signers: ["u-priya"] },
+      { id: "d-infosec", category: "Internal Engineering", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), outstations: ["Ferrybridge", "Humber", "Port Talbot"], signers: [], lists: [] },
+      { id: "d-hs", category: "Internal Health and Safety", name: "Health and Safety Procedures", description: "Site safety rules, PPE requirements and what to do in an emergency.", version: "2026.1", due: isoPlusDays(12), url: "https://intranet.example.com/policies/health-and-safety", status: "open", token: token(), outstations: ["Ferrybridge", "Humber"], lists: ["Health and Safety"], signers: [] },
+      { id: "d-conduct", category: "Customer", name: "Customer Service Standards", description: "How we work with customers on their sites and keep them informed.", version: "1.4", due: isoPlusDays(-5), url: "", status: "open", token: token(), outstations: ["Ferrybridge"], lists: [], signers: ["u-tom", "u-mia"] },
+      { id: "d-expenses", category: "Internal Engineering", name: "Wagon Inspection Procedure", description: "Checks to complete before a wagon returns to service.", version: "2025", due: isoPlusDays(-40), url: "", status: "closed", token: token(), outstations: ["Humber"], lists: [], signers: ["u-priya"] },
     ];
     const ack = (docId, userId, at, ip) => {
       const d = docs.find((x) => x.id === docId), u = users.find((x) => x.id === userId);
-      return { id: uid(), docId, userId, name: u.name, email: u.email, outstation: u.outstation, lists: u.lists.join(", "), docName: d.name, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
+      return { id: uid(), docId, userId, name: u.name, email: u.email, outstation: u.outstation, lists: u.lists.join(", "), docName: d.name, category: d.category, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
     };
     const acks = [
       ack("d-infosec", "u-priya", ago(2, 3), "203.0.113.24"),
@@ -235,7 +240,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   // ---------- state ----------
-  const KEY = "read-ack-demo-v3";
+  const KEY = "read-ack-demo-v4";
   let data, ui;
   function load() {
     try {
@@ -342,12 +347,12 @@ details[open] summary { margin-bottom: 4px; }
     if (/[",\r\n]/.test(t)) t = '"' + t.replace(/"/g, '""') + '"';
     return t;
   }
-  function buildCsv(docId, from, to, outstation, list) {
-    const header = ["acknowledgement_id", "document", "version", "name", "email", "outstation", "distribution_lists", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
+  function buildCsv(docId, from, to, outstation, list, category) {
+    const header = ["acknowledgement_id", "document", "category", "version", "name", "email", "outstation", "distribution_lists", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
     const rows = data.acks
-      .filter((a) => (!docId || a.docId === docId) && (!outstation || a.outstation === outstation) && (!list || (a.lists || "").split(", ").includes(list)) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
+      .filter((a) => (!docId || a.docId === docId) && (!outstation || a.outstation === outstation) && (!list || (a.lists || "").split(", ").includes(list)) && (!category || a.category === category) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map((a) => [a.id, a.docName, a.version, a.name, a.email, a.outstation, a.lists, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
+      .map((a) => [a.id, a.docName, a.category, a.version, a.name, a.email, a.outstation, a.lists, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
     return { text: [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), count: rows.length };
   }
 
@@ -403,7 +408,7 @@ details[open] summary { margin-bottom: 4px; }
       : `${outstanding} ${outstanding === 1 ? "document needs" : "documents need"} your acknowledgement.`;
     return `<div class="fade"><h1>My documents</h1><p class="lead">${lead}</p>
       ${docs.length ? `<div class="table-wrap"><table><thead><tr><th scope="col">Document</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead><tbody>
-      ${docs.map((d) => `<tr><td><button type="button" class="link-button" data-action="open-sign" data-token="${d.token}">${esc(d.name)}</button>${d.version ? `<span class="hint">Version ${esc(d.version)}</span>` : ""}</td>
+      ${docs.map((d) => `<tr><td><button type="button" class="link-button" data-action="open-sign" data-token="${d.token}">${esc(d.name)}</button><span class="hint">${esc([d.category, d.version && "Version " + d.version].filter(Boolean).join(" · "))}</span></td>
         <td>${d.due ? fmtDate(d.due) : "—"}</td><td>${badgeFor(d, u.id)}</td></tr>`).join("")}
       </tbody></table></div>` : ""}
       ${u.role === "admin" && docs.length === 0 ? `<p class="hint">Tip: switch to a reader with <strong>View as</strong> at the top to try signing.</p>` : ""}
@@ -429,6 +434,7 @@ details[open] summary { margin-bottom: 4px; }
     return `<div class="card wide-narrow fade">
       <h1>${esc(d.name)}</h1>
       <dl class="meta">
+        ${d.category ? `<dt>Category</dt><dd>${esc(d.category)}</dd>` : ""}
         ${d.version ? `<dt>Version</dt><dd>${esc(d.version)}</dd>` : ""}
         ${d.due ? `<dt>Due</dt><dd>${fmtDate(d.due)}${!a && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</dd>` : ""}
         <dt>Signing as</dt><dd>${esc(u.name)}</dd>
@@ -441,11 +447,15 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   function viewAdmin() {
-    const docs = data.docs.slice().sort((a, b) => (a.status === "closed") - (b.status === "closed") || String(a.due || "9").localeCompare(String(b.due || "9")));
+    const cat = ui.category || "";
+    const docs = data.docs.filter((d) => !cat || d.category === cat).sort((a, b) => (a.status === "closed") - (b.status === "closed") || String(a.due || "9").localeCompare(String(b.due || "9")));
     const csv = ui.csv;
+    const tabs = ["", ...CATEGORIES].map((c) => `<button type="button" class="tab${c === cat ? " current" : ""}" data-action="category-tab" data-cat="${esc(c)}"${c === cat ? ' aria-current="page"' : ""}>${c ? esc(c) : "All"}</button>`).join("");
     return `<div class="fade">
       <div class="title-row"><h1>Documents</h1><button type="button" data-go="new">New document</button></div>
-      <div class="table-wrap" style="margin-top:16px"><table>
+      <nav class="tabs" aria-label="Filter by category">${tabs}</nav>
+      ${docs.length === 0 ? `<p class="hint" style="margin-top:16px">No documents in this category.</p>` : ""}
+      <div class="table-wrap" style="margin-top:16px"${docs.length ? "" : " hidden"}><table>
         <thead><tr><th scope="col">Document</th><th scope="col">Sent to</th><th scope="col">Due</th><th scope="col">Signed</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead>
         <tbody>${docs.map((d) => {
           const s = signedCount(d), n = expectedIds(d).length, out = n - s, pct = n ? Math.round((s / n) * 100) : 0;
@@ -453,7 +463,7 @@ details[open] summary { margin-bottom: 4px; }
           const dl = d.lists || [];
           const osText = os.length === 0 && dl.length === 0 ? `<span class="hint">Named people only</span>`
             : (os.length === OUTSTATIONS.length ? "All outstations" : esc(os.join(", "))) + (dl.length ? `<span class="hint">${esc(dl.join(", "))}</span>` : "");
-          return `<tr><td><button type="button" class="link-button" data-action="open-doc" data-id="${d.id}">${esc(d.name)}</button>${d.version ? `<span class="hint">Version ${esc(d.version)}</span>` : ""}</td>
+          return `<tr><td><button type="button" class="link-button" data-action="open-doc" data-id="${d.id}">${esc(d.name)}</button><span class="hint">${esc([d.category || "No category", d.version && "Version " + d.version].filter(Boolean).join(" · "))}</span></td>
             <td>${osText}</td>
             <td>${d.due ? fmtDate(d.due) : "—"}${out > 0 && d.status === "open" && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</td>
             <td>${s} of ${n}<div class="progress" aria-hidden="true"><span style="width:${pct}%"></span></div></td>
@@ -466,8 +476,8 @@ details[open] summary { margin-bottom: 4px; }
         <div class="grid-2">
           <div><label for="exp-doc">Document</label><select id="exp-doc" name="doc"><option value="">All documents</option>${data.docs.map((d) => `<option value="${d.id}"${csv && csv.docId === d.id ? " selected" : ""}>${esc(d.name)}${d.version ? ` (${esc(d.version)})` : ""}</option>`).join("")}</select></div>
           <div><label for="exp-os">Outstation</label><select id="exp-os" name="outstation">${outstationOptions(csv ? csv.outstation : "", "All outstations")}</select></div>
+          <div><label for="exp-cat">Category</label><select id="exp-cat" name="category"><option value="">All categories</option>${CATEGORIES.map((c) => `<option${csv && csv.category === c ? " selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
           <div><label for="exp-dl">Distribution list</label><select id="exp-dl" name="list"><option value="">All distribution lists</option>${LISTS.map((l) => `<option${csv && csv.list === l ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
-          <div></div>
           <div><label for="exp-from">Signed from</label><input id="exp-from" name="from" type="date" value="${csv ? esc(csv.from) : ""}"></div>
           <div><label for="exp-to">Signed to</label><input id="exp-to" name="to" type="date" value="${csv ? esc(csv.to) : ""}"></div>
         </div>
@@ -477,7 +487,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   function csvBlock(csv) {
-    const built = buildCsv(csv.docId, csv.from, csv.to, csv.outstation, csv.list);
+    const built = buildCsv(csv.docId, csv.from, csv.to, csv.outstation, csv.list, csv.category);
     return `<p class="hint" style="margin-top:16px">${built.count} ${built.count === 1 ? "record" : "records"}.</p>
       <pre class="csv" id="csv-text">${esc(built.text)}</pre>
       <div class="actions"><button type="button" class="secondary" data-action="copy" data-target="csv-text">Copy CSV</button></div>`;
@@ -496,6 +506,8 @@ details[open] summary { margin-bottom: 4px; }
       ${flash && flash.form === p ? `<p class="notice ${flash.ok ? "ok" : "bad"}" role="${flash.ok ? "status" : "alert"}">${esc(flash.text)}</p>` : ""}
       <label for="${p}-name">Document name</label>
       <input id="${p}-name" name="name" type="text" required maxlength="200" value="${esc(d ? d.name : "")}">
+      <label for="${p}-category">Category</label>
+      <select id="${p}-category" name="category" required><option value="" disabled${d && d.category ? "" : " selected"}>Choose a category</option>${CATEGORIES.map((c) => `<option${d && d.category === c ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>
       <label for="${p}-desc">Description <span class="hint">Optional. Shown to readers on the sign page.</span></label>
       <textarea id="${p}-desc" name="description" maxlength="4000">${esc(d ? d.description : "")}</textarea>
       <div class="grid-2">
@@ -558,7 +570,7 @@ details[open] summary { margin-bottom: 4px; }
     return `<div class="fade">
       <p><button type="button" class="link-button" data-go="admin">← Documents</button></p>
       <h1>${esc(d.name)} <span class="badge ${d.status === "open" ? "ok" : "muted"}">${d.status === "open" ? "Open" : "Closed"}</span></h1>
-      <p class="lead">${s} of ${n} signed${d.version ? ` · Version ${esc(d.version)}` : ""}${d.due ? ` · Due ${fmtDate(d.due)}` : ""}${overdue && s < n ? " · Overdue" : ""}</p>
+      <p class="lead">${esc(d.category || "No category")} · ${s} of ${n} signed${d.version ? ` · Version ${esc(d.version)}` : ""}${d.due ? ` · Due ${fmtDate(d.due)}` : ""}${overdue && s < n ? " · Overdue" : ""}</p>
 
       <section class="card" aria-labelledby="share-h">
         <h2 id="share-h">Share link</h2>
@@ -741,6 +753,7 @@ details[open] summary { margin-bottom: 4px; }
         const d = docById(ui.docId); d.signers = d.signers.filter((s) => s !== id);
         save(); render(); return toast(`Removed ${userById(id).name} from this document.`);
       }
+      case "category-tab": ui.category = el.getAttribute("data-cat"); save(); return render();
       case "add-me": {
         const d = docById(id), u = me();
         if (!isExpected(d, u.id)) d.signers.push(u.id);
@@ -807,7 +820,7 @@ details[open] summary { margin-bottom: 4px; }
       if (!f.get("agree")) return;
       const u = me(), d = data.docs.find((x) => x.token === ui.token);
       if (!liveAck(d.id, u.id)) {
-        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, outstation: u.outstation || "", lists: (u.lists || []).join(", "), docName: d.name, version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
+        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, outstation: u.outstation || "", lists: (u.lists || []).join(", "), docName: d.name, category: d.category || "", version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
       }
       return go("sign", { justSigned: true });
     }
@@ -816,7 +829,8 @@ details[open] summary { margin-bottom: 4px; }
       const formKey = kind === "doc-new" ? "new" : "edit";
       if (!name) { flash = { form: formKey, text: "Give the document a name." }; return render(); }
       if (url && !/^https?:\/\/\S+$/i.test(url)) { flash = { form: formKey, text: "The document location must be a web address starting with http:// or https://." }; return render(); }
-      const fields = { name, description: val("description"), version: val("version"), due: val("due"), url };
+      if (!CATEGORIES.includes(val("category"))) { flash = { form: formKey, text: "Choose a category." }; return render(); }
+      const fields = { name, category: val("category"), description: val("description"), version: val("version"), due: val("due"), url };
       if (kind === "doc-new") {
         const d = Object.assign({ id: "d-" + uid(), status: "open", token: token(), signers: [], outstations: f.getAll("outstations").map(String), lists: f.getAll("lists").map(String) }, fields);
         data.docs.push(d); return go("doc", { docId: d.id });
@@ -850,7 +864,7 @@ details[open] summary { margin-bottom: 4px; }
       save(); render(); return toast(`Voided. ${a.name} can sign again.`);
     }
     if (kind === "export") {
-      ui.csv = { docId: val("doc"), outstation: val("outstation"), list: val("list"), from: val("from"), to: val("to") };
+      ui.csv = { docId: val("doc"), outstation: val("outstation"), list: val("list"), category: val("category"), from: val("from"), to: val("to") };
       save(); render();
       const pre = document.getElementById("csv-text"); if (pre) pre.scrollIntoView({ block: "nearest" });
       return;

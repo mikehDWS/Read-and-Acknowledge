@@ -189,16 +189,19 @@ type DocumentValues = {
   version_label: string | null;
   due_date: string | null;
   location_url: string | null;
+  category_id?: number | null;
 };
 
 export function DocumentForm({
   doc,
   outstations,
   lists = [],
+  categories,
 }: {
   doc?: DocumentValues;
   outstations?: Outstation[];
   lists?: Group[];
+  categories: Group[];
 }) {
   const [state, action, pending] = useActionState<DocumentFormState, FormData>(
     doc?.id ? updateDocument : createDocument,
@@ -219,6 +222,17 @@ export function DocumentForm({
       {doc?.id && <input type="hidden" name="id" value={doc.id} />}
       <label htmlFor="name">Document name</label>
       <input id="name" name="name" type="text" required maxLength={200} defaultValue={doc?.name} />
+      <label htmlFor="category_id">Category</label>
+      <select id="category_id" name="category_id" required defaultValue={doc?.category_id ?? ""}>
+        <option value="" disabled>
+          Choose a category
+        </option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
       <label htmlFor="description">
         Description <span className="hint">Optional. Shown to readers on the sign page.</span>
       </label>

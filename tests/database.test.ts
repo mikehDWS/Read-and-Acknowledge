@@ -151,6 +151,13 @@ describe.skipIf(!url)("acknowledgements table", () => {
     await expectError("UPDATE acknowledgements SET signer_distribution_lists = 'Purchasing' WHERE id = $1", [id], /voided/);
   });
 
+  it("has the three document categories and protects a record's category", async () => {
+    const { rows } = await client.query("SELECT name FROM document_categories ORDER BY sort_order");
+    expect(rows.map((r) => r.name)).toEqual(["Customer", "Internal Engineering", "Internal Health and Safety"]);
+    const id = await sign();
+    await expectError("UPDATE acknowledgements SET document_category = 'Customer' WHERE id = $1", [id], /voided/);
+  });
+
   it("only accepts web links for document locations", async () => {
     await expectError("UPDATE documents SET location_url = 'javascript:alert(1)' WHERE id = $1", [docId], /check/);
   });
