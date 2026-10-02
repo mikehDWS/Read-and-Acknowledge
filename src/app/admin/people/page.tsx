@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { query } from "@/lib/db";
-import { listDistributionLists, listOutstations } from "@/lib/outstations";
+import { listDepartments } from "@/lib/departments";
 import { requireAdmin } from "@/lib/session";
 import { setRole } from "../actions";
 import { AddPeopleForm, PersonEditForm, PersonLinkButton } from "../components";
@@ -12,10 +12,8 @@ type Person = {
   name: string;
   email: string;
   employee_id: string | null;
-  outstation_id: number | null;
-  outstation: string | null;
-  distribution_ids: number[];
-  distribution_lists: string[];
+  department_id: number | null;
+  department: string | null;
   role: "reader" | "admin";
   has_password: boolean;
   locked: boolean;
@@ -25,36 +23,30 @@ type Person = {
 export default async function PeoplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; outstation?: string; list?: string }>;
+  searchParams: Promise<{ q?: string; department?: string }>;
 }) {
   const admin = await requireAdmin("/admin/people");
-  const { q, outstation, list } = await searchParams;
+  const { q, department } = await searchParams;
   const search = q?.trim().slice(0, 200) ?? "";
-  const [outstations, lists] = await Promise.all([listOutstations(), listDistributionLists()]);
-  const listFilter = lists.find((l) => String(l.id) === list)?.id ?? null;
-  // "none" lists people without an outstation; a number lists one outstation.
-  const outstationFilter =
-    outstation === "none" ? "none" : outstations.find((o) => String(o.id) === outstation)?.id ?? null;
+  const departments = await listDepartments();
+  // "none" lists people without a department; a number lists one department.
+  const departmentFilter =
+    department === "none" ? "none" : departments.find((o) => String(o.id) === department)?.id ?? null;
   const people = await query<Person>(
-    `SELECT u.id, u.name, u.email, u.employee_id, u.outstation_id, o.name AS outstation, u.role,
-            ARRAY(SELECT udl.list_id FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
-                   WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS distribution_ids,
-            ARRAY(SELECT dl.name FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
-                   WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS distribution_lists,
+    `SELECT u.id, u.name, u.email, u.employee_id, u.department_id, o.name AS department, u.role,
+
             u.password_hash IS NOT NULL AS has_password,
             coalesce(u.locked_until > now(), false) AS locked,
             (SELECT count(*) FROM document_signers es WHERE es.user_id = u.id)::int AS documents
        FROM users u
-       LEFT JOIN outstations o ON o.id = u.outstation_id
+       LEFT JOIN departments o ON o.id = u.department_id
       WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')
         AND ($2::text IS NULL
-             OR ($2 = 'none' AND u.outstation_id IS NULL)
-             OR u.outstation_id::text = $2)
-        AND ($3::int IS NULL
-             OR EXISTS (SELECT 1 FROM user_distribution_lists udl WHERE udl.user_id = u.id AND udl.list_id = $3))
+             OR ($2 = 'none' AND u.department_id IS NULL)
+             OR u.department_id::text = $2)
       ORDER BY lower(u.name)
       LIMIT 500`,
-    [search.replace(/[\\%_]/g, (c) => `\\${c}`), outstationFilter === null ? null : String(outstationFilter), listFilter],
+    [search.replace(/[\\%_]/g, (c) => `\\${c}`), departmentFilter === null ? null : String(departmentFilter)],
   );
 
   return (
@@ -70,29 +62,19 @@ export default async function PeoplePage({
           Search people
         </label>
         <input id="q" name="q" type="search" placeholder="Search by name or email" defaultValue={search} />
-        <label htmlFor="outstation-filter" className="visually-hidden">
-          Outstation
+        <label htmlFor="department-filter" className="visually-hidden">
+          Department
         </label>
-        <select id="outstation-filter" name="outstation" defaultValue={outstationFilter === null ? "" : String(outstationFilter)}>
-          <option value="">All outstations</option>
-          {outstations.map((o) => (
+        <select id="department-filter" name="department" defaultValue={departmentFilter === null ? "" : String(departmentFilter)}>
+          <option value="">All departments</option>
+          {departments.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}
             </option>
           ))}
-          <option value="none">No outstation</option>
+          <option value="none">No department</option>
         </select>
-        <label htmlFor="list-filter" className="visually-hidden">
-          Distribution list
-        </label>
-        <select id="list-filter" name="list" defaultValue={listFilter === null ? "" : String(listFilter)}>
-          <option value="">All distribution lists</option>
-          {lists.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
+
         <button type="submit" className="secondary">
           Search
         </button>
@@ -106,7 +88,7 @@ export default async function PeoplePage({
             <thead>
               <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Outstation and lists</th>
+                <th scope="col">Department</th>
                 <th scope="col">Account</th>
                 <th scope="col">Role</th>
                 <th scope="col">
@@ -126,16 +108,7 @@ export default async function PeoplePage({
                     </span>
                   </td>
                   <td>
-                    {p.outstation ?? <span className="hint">No outstation</span>}
-                    {p.distribution_lists.length > 0 && (
-                      <span className="chips">
-                        {p.distribution_lists.map((l) => (
-                          <span key={l} className="badge muted">
-                            {l}
-                          </span>
-                        ))}
-                      </span>
-                    )}
+                    {p.department ?? <span className="hint">No department</span>}
                   </td>
                   <td>
                     {p.has_password ? (
@@ -161,7 +134,7 @@ export default async function PeoplePage({
                     )}
                   </td>
                   <td>
-                    <PersonEditForm person={p} outstations={outstations} lists={lists} />
+                    <PersonEditForm person={p} departments={departments} />
                   </td>
                 </tr>
               ))}
@@ -174,7 +147,7 @@ export default async function PeoplePage({
         <h2 id="add-people-heading" style={{ marginTop: 0 }}>
           Add people
         </h2>
-        <AddPeopleForm outstations={outstations} lists={lists} />
+        <AddPeopleForm departments={departments} />
       </section>
     </>
   );

@@ -1,6 +1,6 @@
 import { isEmail } from "./validation";
 
-export type ParsedPerson = { name: string; email: string; outstation?: string; distributionLists?: string[] };
+export type ParsedPerson = { name: string; email: string; department?: string };
 export type ParseProblem = { line: number; text: string; reason: string };
 
 /**
@@ -9,18 +9,15 @@ export type ParseProblem = { line: number; text: string; reason: string };
  *   Name<TAB>email       (pasted from a spreadsheet; either column order)
  *   Name <email>
  *   email                (name taken from the part before @)
- * A column that exactly matches one of `outstations` (any case) is read as the person's outstation,
- * e.g. "Sam Patel, sam@example.com, Ferrybridge". Columns matching `distributionLists` are collected
- * the same way, e.g. "Sam Patel, sam@example.com, Ferrybridge, Engineering, Purchasing".
+ * A column that exactly matches one of `departments` (any case) is read as the person's department,
+ * e.g. "Sam Patel, sam@example.com, Ferrybridge".
  * Duplicate emails are collapsed; a header row such as "Name, Email" is skipped.
  */
 export function parsePeopleList(
   input: string,
-  outstations: string[] = [],
-  distributionLists: string[] = [],
+  departments: string[] = [],
 ): { people: ParsedPerson[]; problems: ParseProblem[] } {
-  const outstationByKey = new Map(outstations.map((o) => [o.toLowerCase(), o]));
-  const listByKey = new Map(distributionLists.map((l) => [l.toLowerCase(), l]));
+  const departmentByKey = new Map(departments.map((o) => [o.toLowerCase(), o]));
   const people: ParsedPerson[] = [];
   const problems: ParseProblem[] = [];
   const seen = new Set<string>();
@@ -35,8 +32,7 @@ export function parsePeopleList(
 
     let name = "";
     let email = "";
-    let outstation: string | undefined;
-    const lists: string[] = [];
+    let department: string | undefined;
 
     const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
     if (angle) {
@@ -54,18 +50,10 @@ export function parsePeopleList(
         return;
       }
       email = parts[emailIndex];
-      const outstationIndex = parts.findIndex((p, i) => i !== emailIndex && outstationByKey.has(p.toLowerCase()));
-      if (outstationIndex !== -1) outstation = outstationByKey.get(parts[outstationIndex].toLowerCase());
-      const listIndexes = new Set<number>();
-      parts.forEach((p, i) => {
-        const list = i !== emailIndex && i !== outstationIndex ? listByKey.get(p.toLowerCase()) : undefined;
-        if (list) {
-          listIndexes.add(i);
-          if (!lists.includes(list)) lists.push(list);
-        }
-      });
+      const departmentIndex = parts.findIndex((p, i) => i !== emailIndex && departmentByKey.has(p.toLowerCase()));
+      if (departmentIndex !== -1) department = departmentByKey.get(parts[departmentIndex].toLowerCase());
       name = parts
-        .filter((_, i) => i !== emailIndex && i !== outstationIndex && !listIndexes.has(i))
+        .filter((_, i) => i !== emailIndex && i !== departmentIndex)
         .join(" ")
         .trim();
     }
@@ -79,8 +67,7 @@ export function parsePeopleList(
     if (seen.has(email)) return;
     seen.add(email);
     const person: ParsedPerson = { name: name.slice(0, 200), email };
-    if (outstation) person.outstation = outstation;
-    if (lists.length) person.distributionLists = lists;
+    if (department) person.department = department;
     people.push(person);
   });
 

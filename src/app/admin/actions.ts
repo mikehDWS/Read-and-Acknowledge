@@ -7,15 +7,13 @@ import { createAccountLink } from "@/lib/account-links";
 import { audit } from "@/lib/audit";
 import { isUniqueViolation, query, queryOne, transaction, type Queryable } from "@/lib/db";
 import {
-  findOutstation,
+  findDepartment,
   idsFrom,
   listCategories,
-  listDistributionLists,
-  listOutstations,
-  outstationIdFrom,
-  type DistributionList,
-  type Outstation,
-} from "@/lib/outstations";
+  listDepartments,
+  departmentIdFrom,
+  type Department,
+} from "@/lib/departments";
 import { parsePeopleList, type ParsedPerson, type ParseProblem } from "@/lib/people";
 import { appBaseUrl } from "@/lib/request";
 import { assertAdmin, endAllSessions } from "@/lib/session";
@@ -124,26 +122,19 @@ export async function setDocumentStatus(form: FormData): Promise<void> {
   revalidatePath("/admin");
 }
 
-/** Replaces a document's outstations and distribution lists with the ones ticked on the form. */
+/** Replaces a document's departments with the ones ticked on the form. */
 async function saveDocumentGroups(db: Queryable, documentId: string, form: FormData, actorId: string) {
-  const outstationIds = idsFrom(form, "outstation_ids", await listOutstations(db));
-  const listIds = idsFrom(form, "distribution_ids", await listDistributionLists(db));
-  const changed =
-    (await replaceSet(db, "document_outstations", "outstation_id", documentId, outstationIds)) |
-    (await replaceSet(db, "document_distribution_lists", "list_id", documentId, listIds));
-  if (changed) {
-    await audit(db, actorId, "document.groups", "document", documentId, {
-      outstation_ids: outstationIds,
-      distribution_list_ids: listIds,
-    });
+  const departmentIds = idsFrom(form, "department_ids", await listDepartments(db));
+  if (await replaceSet(db, "document_departments", "department_id", documentId, departmentIds)) {
+    await audit(db, actorId, "document.groups", "document", documentId, { department_ids: departmentIds });
   }
 }
 
 /** Makes a document's rows in a link table match `ids`; returns 1 if anything changed. */
 async function replaceSet(
   db: Queryable,
-  table: "document_outstations" | "document_distribution_lists",
-  column: "outstation_id" | "list_id",
+  table: "document_departments",
+  column: "department_id",
   documentId: string,
   ids: number[],
 ): Promise<number> {
@@ -161,12 +152,12 @@ async function replaceSet(
   return removed.length + added.length > 0 ? 1 : 0;
 }
 
-export type OutstationsFormState = { error?: string; saved?: boolean };
+export type DepartmentsFormState = { error?: string; saved?: boolean };
 
-export async function setDocumentOutstations(
-  _prev: OutstationsFormState,
+export async function setDocumentDepartments(
+  _prev: DepartmentsFormState,
   form: FormData,
-): Promise<OutstationsFormState> {
+): Promise<DepartmentsFormState> {
   const admin = await assertAdmin();
   const documentId = text(form, "document_id", 36);
   if (!isUuid(documentId)) return { error: "Document not found." };
@@ -193,84 +184,54 @@ export type AddPeopleState = {
 
 /**
  * Finds or creates reader accounts for each email; returns their ids and how many were new.
- * An outstation named on a person's line wins; otherwise `defaultOutstationId` is used for new
- * people and for existing people who don't have an outstation yet. Distribution lists are added:
- * the ticked ones plus any named on the line, keeping lists the person is already on.
+ * A department named on a person's line wins; otherwise `defaultDepartmentId` is used for new
+ * people and for existing people who don't have a department yet.
  */
 async function upsertPeople(
   db: Queryable,
   people: ParsedPerson[],
   actorId: string,
-  outstations: Outstation[],
-  defaultOutstationId: number | null,
-  lists: DistributionList[] = [],
-  defaultListIds: number[] = [],
+  departments: Department[],
+  defaultDepartmentId: number | null,
 ): Promise<{ ids: string[]; created: number }> {
   const ids: string[] = [];
   let created = 0;
   for (const person of people) {
-    const named = person.outstation ? findOutstation(person.outstation, outstations)?.id ?? null : null;
-    const existing = await queryOne<{ id: string; outstation_id: number | null }>(
-      "SELECT id, outstation_id FROM users WHERE lower(email) = $1",
+    const named = person.department ? findDepartment(person.department, departments)?.id ?? null : null;
+    const existing = await queryOne<{ id: string; department_id: number | null }>(
+      "SELECT id, department_id FROM users WHERE lower(email) = $1",
       [person.email],
       db,
     );
     if (existing) {
-      const next = named ?? (existing.outstation_id === null ? defaultOutstationId : null);
-      if (next !== null && next !== existing.outstation_id) {
-        await query("UPDATE users SET outstation_id = $2, updated_at = now() WHERE id = $1", [existing.id, next], db);
-        await audit(db, actorId, "user.outstation", "user", existing.id, { outstation_id: next });
+      const next = named ?? (existing.department_id === null ? defaultDepartmentId : null);
+      if (next !== null && next !== existing.department_id) {
+        await query("UPDATE users SET department_id = $2, updated_at = now() WHERE id = $1", [existing.id, next], db);
+        await audit(db, actorId, "user.department", "user", existing.id, { department_id: next });
       }
-      await addToLists(db, existing.id, person, lists, defaultListIds);
       ids.push(existing.id);
       continue;
     }
     const [user] = await query<{ id: string }>(
-      "INSERT INTO users (name, email, outstation_id) VALUES ($1, $2, $3) RETURNING id",
-      [person.name, person.email, named ?? defaultOutstationId],
+      "INSERT INTO users (name, email, department_id) VALUES ($1, $2, $3) RETURNING id",
+      [person.name, person.email, named ?? defaultDepartmentId],
       db,
     );
     await audit(db, actorId, "user.create", "user", user.id, { email: person.email });
-    await addToLists(db, user.id, person, lists, defaultListIds);
     ids.push(user.id);
     created += 1;
   }
   return { ids, created };
 }
 
-async function addToLists(
-  db: Queryable,
-  userId: string,
-  person: ParsedPerson,
-  lists: DistributionList[],
-  defaultListIds: number[],
-) {
-  const named = (person.distributionLists ?? [])
-    .map((n) => lists.find((l) => l.name.toLowerCase() === n.toLowerCase())?.id)
-    .filter((id): id is number => id !== undefined);
-  const ids = [...new Set([...defaultListIds, ...named])];
-  if (ids.length === 0) return;
-  await query(
-    `INSERT INTO user_distribution_lists (user_id, list_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`,
-    [userId, ids],
-    db,
-  );
-}
-
 export async function addSigners(_prev: AddPeopleState, form: FormData): Promise<AddPeopleState> {
   const admin = await assertAdmin();
   const documentId = text(form, "document_id", 36);
   if (!isUuid(documentId)) return { error: "Document not found." };
-  const outstations = await listOutstations();
-  const defaultOutstation = outstationIdFrom(form.get("outstation_id"), outstations);
-  if (defaultOutstation === undefined) return { error: "Choose an outstation from the list." };
-  const lists = await listDistributionLists();
-  const defaultListIds = idsFrom(form, "distribution_ids", lists);
-  const { people, problems } = parsePeopleList(
-    text(form, "people", 500_000),
-    outstations.map((o) => o.name),
-    lists.map((l) => l.name),
-  );
+  const departments = await listDepartments();
+  const defaultDepartment = departmentIdFrom(form.get("department_id"), departments);
+  if (defaultDepartment === undefined) return { error: "Choose a department from the list." };
+  const { people, problems } = parsePeopleList(text(form, "people", 500_000), departments.map((o) => o.name));
   if (people.length === 0) {
     return { error: problems.length ? "No valid lines found." : "Add at least one person.", problems };
   }
@@ -278,8 +239,8 @@ export async function addSigners(_prev: AddPeopleState, form: FormData): Promise
   const summary = await transaction(async (db) => {
     const doc = await queryOne("SELECT 1 FROM documents WHERE id = $1 FOR UPDATE", [documentId], db);
     if (!doc) return null;
-    const { ids, created } = await upsertPeople(db, people, admin.id, outstations, defaultOutstation, lists, defaultListIds);
-    // People already expected through one of the document's outstations count as already listed.
+    const { ids, created } = await upsertPeople(db, people, admin.id, departments, defaultDepartment);
+    // People already expected through one of the document's departments count as already listed.
     const inserted = await query(
       `INSERT INTO expected_signers (document_id, user_id)
        SELECT $1, u FROM unnest($2::uuid[]) AS u
@@ -344,21 +305,15 @@ export async function addMeAsSigner(form: FormData): Promise<void> {
 
 export async function addPeople(_prev: AddPeopleState, form: FormData): Promise<AddPeopleState> {
   const admin = await assertAdmin();
-  const outstations = await listOutstations();
-  const defaultOutstation = outstationIdFrom(form.get("outstation_id"), outstations);
-  if (defaultOutstation === undefined) return { error: "Choose an outstation from the list." };
-  const lists = await listDistributionLists();
-  const defaultListIds = idsFrom(form, "distribution_ids", lists);
-  const { people, problems } = parsePeopleList(
-    text(form, "people", 500_000),
-    outstations.map((o) => o.name),
-    lists.map((l) => l.name),
-  );
+  const departments = await listDepartments();
+  const defaultDepartment = departmentIdFrom(form.get("department_id"), departments);
+  if (defaultDepartment === undefined) return { error: "Choose a department from the list." };
+  const { people, problems } = parsePeopleList(text(form, "people", 500_000), departments.map((o) => o.name));
   if (people.length === 0) {
     return { error: problems.length ? "No valid lines found." : "Add at least one person.", problems };
   }
   const { ids, created } = await transaction((db) =>
-    upsertPeople(db, people, admin.id, outstations, defaultOutstation, lists, defaultListIds),
+    upsertPeople(db, people, admin.id, departments, defaultDepartment),
   );
   revalidatePath("/admin/people");
   return { summary: { added: created, alreadyListed: ids.length - created, newAccounts: created }, problems };
@@ -372,32 +327,24 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
   const name = text(form, "name", 200);
   const email = text(form, "email", 254).toLowerCase();
   const employeeId = optionalText(form, "employee_id", 100);
-  const outstationId = outstationIdFrom(form.get("outstation_id"), await listOutstations());
-  const listIds = idsFrom(form, "distribution_ids", await listDistributionLists());
+  const departmentId = departmentIdFrom(form.get("department_id"), await listDepartments());
   if (!isUuid(id)) return { error: "Person not found." };
-  if (outstationId === undefined) return { error: "Choose an outstation from the list." };
+  if (departmentId === undefined) return { error: "Choose a department from the list." };
   if (!name) return { error: "Enter a name." };
   if (!isEmail(email)) return { error: "Enter a valid email address." };
   try {
     await transaction(async (db) => {
       await query(
-        `UPDATE users SET name = $2, email = $3, employee_id = $4, outstation_id = $5, updated_at = now()
+        `UPDATE users SET name = $2, email = $3, employee_id = $4, department_id = $5, updated_at = now()
           WHERE id = $1`,
-        [id, name, email, employeeId, outstationId],
-        db,
-      );
-      await query("DELETE FROM user_distribution_lists WHERE user_id = $1 AND NOT (list_id = ANY($2::int[]))", [id, listIds], db);
-      await query(
-        "INSERT INTO user_distribution_lists (user_id, list_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING",
-        [id, listIds],
+        [id, name, email, employeeId, departmentId],
         db,
       );
       await audit(db, admin.id, "user.update", "user", id, {
         name,
         email,
         employee_id: employeeId,
-        outstation_id: outstationId,
-        distribution_list_ids: listIds,
+        department_id: departmentId,
       });
     });
   } catch (err) {

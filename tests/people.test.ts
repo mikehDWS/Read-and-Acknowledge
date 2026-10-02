@@ -37,37 +37,23 @@ describe("parsePeopleList", () => {
   });
 });
 
-describe("parsePeopleList with outstations", () => {
-  const outstations = ["Head Office", "Ferrybridge", "Isle of Grain"];
+describe("parsePeopleList with departments", () => {
+  const departments = ["Head Office", "Ferrybridge", "Isle of Grain"];
 
-  it("reads an outstation column in any position and any case", () => {
+  it("reads a department column in any position and any case", () => {
     const { people } = parsePeopleList(
       "Sam Patel, sam@example.com, Ferrybridge\nisle of grain\tAlex Jones\talex@example.com\nJo Bloggs, jo@example.com",
-      outstations,
+      departments,
     );
     expect(people).toEqual([
-      { name: "Sam Patel", email: "sam@example.com", outstation: "Ferrybridge" },
-      { name: "Alex Jones", email: "alex@example.com", outstation: "Isle of Grain" },
+      { name: "Sam Patel", email: "sam@example.com", department: "Ferrybridge" },
+      { name: "Alex Jones", email: "alex@example.com", department: "Isle of Grain" },
       { name: "Jo Bloggs", email: "jo@example.com" },
     ]);
   });
 
   it("keeps an unknown third column as part of the name", () => {
-    const { people } = parsePeopleList("Sam, sam@example.com, Patel", outstations);
+    const { people } = parsePeopleList("Sam, sam@example.com, Patel", departments);
     expect(people).toEqual([{ name: "Sam Patel", email: "sam@example.com" }]);
-  });
-});
-
-describe("parsePeopleList with distribution lists", () => {
-  it("collects any distribution list columns alongside the outstation", () => {
-    const { people } = parsePeopleList(
-      "Sam Patel, sam@example.com, Ferrybridge, Engineering, health and safety\nAlex\talex@example.com\tPurchasing",
-      ["Ferrybridge", "Humber"],
-      ["Engineering", "Purchasing", "Health and Safety", "Operations Managers"],
-    );
-    expect(people).toEqual([
-      { name: "Sam Patel", email: "sam@example.com", outstation: "Ferrybridge", distributionLists: ["Engineering", "Health and Safety"] },
-      { name: "Alex", email: "alex@example.com", distributionLists: ["Purchasing"] },
-    ]);
   });
 });

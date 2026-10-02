@@ -11,8 +11,7 @@ type Row = {
   version_label: string | null;
   signer_name: string;
   signer_email: string;
-  signer_outstation: string | null;
-  signer_distribution_lists: string | null;
+  signer_department: string | null;
   employee_id: string | null;
   acknowledged_at: Date;
   statement_text: string;
@@ -30,8 +29,7 @@ const HEADER = [
   "version",
   "name",
   "email",
-  "outstation",
-  "distribution_lists",
+  "department",
   "employee_id",
   "acknowledged_at_utc",
   "statement",
@@ -53,8 +51,7 @@ export async function GET(request: NextRequest) {
   const documentId = params.get("document") ?? "";
   const from = optionalDate(params.get("from") ?? "");
   const to = optionalDate(params.get("to") ?? "");
-  const outstation = params.get("outstation")?.trim().slice(0, 200) || null;
-  const list = params.get("list")?.trim().slice(0, 200) || null;
+  const department = params.get("department")?.trim().slice(0, 200) || null;
   const category = params.get("category")?.trim().slice(0, 200) || null;
   if ((documentId && !isUuid(documentId)) || from === undefined || to === undefined) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
@@ -62,7 +59,7 @@ export async function GET(request: NextRequest) {
 
   // Dates are whole UTC days; "to" is inclusive.
   const rows = await query<Row>(
-    `SELECT a.id, a.document_name, a.document_category, a.version_label, a.signer_name, a.signer_email, a.signer_outstation, a.signer_distribution_lists, u.employee_id,
+    `SELECT a.id, a.document_name, a.document_category, a.version_label, a.signer_name, a.signer_email, a.signer_department, u.employee_id,
             a.acknowledged_at, a.statement_text, a.ip_address, a.user_agent,
             a.voided_at, v.email AS voided_by, a.void_reason
        FROM acknowledgements a
@@ -71,11 +68,10 @@ export async function GET(request: NextRequest) {
       WHERE ($1::uuid IS NULL OR a.document_id = $1::uuid)
         AND ($2::date IS NULL OR a.acknowledged_at >= $2::date)
         AND ($3::date IS NULL OR a.acknowledged_at < $3::date + 1)
-        AND ($4::text IS NULL OR lower(a.signer_outstation) = lower($4))
-        AND ($5::text IS NULL OR lower($5) = ANY (string_to_array(lower(a.signer_distribution_lists), ', ')))
-        AND ($6::text IS NULL OR lower(a.document_category) = lower($6))
+        AND ($4::text IS NULL OR lower(a.signer_department) = lower($4))
+        AND ($5::text IS NULL OR lower(a.document_category) = lower($5))
       ORDER BY a.acknowledged_at`,
-    [documentId || null, from, to, outstation, list, category],
+    [documentId || null, from, to, department, category],
   );
 
   const csv = toCsv(
@@ -87,8 +83,7 @@ export async function GET(request: NextRequest) {
       r.version_label,
       r.signer_name,
       r.signer_email,
-      r.signer_outstation,
-      r.signer_distribution_lists,
+      r.signer_department,
       r.employee_id,
       r.acknowledged_at,
       r.statement_text,

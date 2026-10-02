@@ -84,14 +84,11 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Put each document in a **category**: Customer, Internal Engineering or Internal Health and Safety.
   The Documents page has a tab for each, readers see the category on their documents, and CSV exports
   include it and can be filtered by it.
-- Choose which **outstations** (maintenance teams) need to acknowledge a document. Everyone at a ticked
-  outstation is expected to sign, including people who join it later. The outstations are Head Office,
-  Ferrybridge, Tuebrook, Stirling, Bardon, Isle of Grain, Humber, Port Talbot, Llanwern and Milford Haven.
-- Tick **distribution lists** too: Engineering, Purchasing, Health and Safety and Operations Managers.
-  Anyone at a ticked outstation **or** on a ticked list is expected to sign. A person has one outstation
-  but can be on several lists.
-- See progress by outstation and by distribution list on each document, and filter people and CSV
-  exports by either.
+- Choose which **departments** need to acknowledge a document. Everyone in a ticked department is
+  expected to sign, including people who join it later. The departments are Head Office, Ferrybridge,
+  Tuebrook, Stirling, Bardon, Isle of Grain, Humber, Port Talbot, Llanwern, Milford Haven, Engineering,
+  Health and Safety, Purchasing, Operations Management and Fleet Control. Each person is in one department.
+- See progress by department on each document, and filter people and CSV exports by department.
 - Add the people expected to sign, typed in or pasted straight from a spreadsheet (`Name, email`, two
   tab-separated columns in either order, or `Name <email>`). New email addresses get a reader account.
 - Copy the document's sign link and share it themselves.
@@ -101,9 +98,8 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Export acknowledgement records to CSV, filtered by document and date range.
 - Acknowledge documents themselves: **Add me to this list** on a document's page (or on its sign
   page), then sign it like anyone else. Their documents also appear under **My documents**.
-- Give each person an outstation and distribution lists when adding them (tick them for the whole
-  batch, or put them on each line, e.g. `Sam Patel, sam@example.com, Ferrybridge, Engineering`), and
-  change them later from the People page.
+- Give each person a department when adding them (pick one for the whole batch, or put it on each
+  line, e.g. `Sam Patel, sam@example.com, Ferrybridge`), and change it later from the People page.
 - Manage people: edit names, emails and employee IDs, make or remove admins, and create
   set-password or reset links.
 
@@ -129,7 +125,7 @@ Other choices worth knowing:
 - Acknowledgements are **append-only, enforced by the database**: a trigger blocks deletes, truncates
   and edits. The only change allowed is voiding a live record once, with a reason, and who voided it.
   A partial unique index allows one live acknowledgement per person per document.
-- Each record stores the signer's name, email, outstation and distribution lists at the time, document name and category, version label, the exact statement
+- Each record stores the signer's name, email and department at the time, document name and category, version label, the exact statement
   text, timestamp, IP address and browser user agent.
 - Admin actions (creating documents, adding and removing people, role changes, voids, account links)
   are written to an `audit_log` table.

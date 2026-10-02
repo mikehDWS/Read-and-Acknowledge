@@ -95,26 +95,27 @@ describe.skipIf(!url)("acknowledgements table", () => {
     await expectError("DELETE FROM documents WHERE id = $1", [docId], /foreign key/);
   });
 
-  it("protects the signer's outstation on a record", async () => {
+  it("protects the signer's department on a record", async () => {
     const id = await sign();
-    await expectError("UPDATE acknowledgements SET signer_outstation = 'Humber' WHERE id = $1", [id], /voided/);
+    await expectError("UPDATE acknowledgements SET signer_department = 'Humber' WHERE id = $1", [id], /voided/);
   });
 
-  it("expects everyone at a document's outstations, including people who join later", async () => {
-    const { rows } = await client.query("SELECT id, name FROM outstations ORDER BY sort_order");
+  it("expects everyone at a document's departments, including people who join later", async () => {
+    const { rows } = await client.query("SELECT id, name FROM departments ORDER BY sort_order");
     expect(rows.map((r) => r.name)).toEqual([
       "Head Office", "Ferrybridge", "Tuebrook", "Stirling", "Bardon",
       "Isle of Grain", "Humber", "Port Talbot", "Llanwern", "Milford Haven",
+      "Engineering", "Health and Safety", "Purchasing", "Operations Management", "Fleet Control",
     ]);
     const ferrybridge = rows[1].id;
     const humber = rows[6].id;
     const expected = async () =>
       (await client.query("SELECT user_id, individual FROM document_signers WHERE document_id = $1 ORDER BY user_id", [docId])).rows;
 
-    await client.query("INSERT INTO document_outstations (document_id, outstation_id) VALUES ($1, $2)", [docId, ferrybridge]);
+    await client.query("INSERT INTO document_departments (document_id, department_id) VALUES ($1, $2)", [docId, ferrybridge]);
     expect(await expected()).toEqual([]);
 
-    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, ferrybridge]);
+    await client.query("UPDATE users SET department_id = $2 WHERE id = $1", [userId, ferrybridge]);
     expect(await expected()).toEqual([{ user_id: userId, individual: false }]);
 
     // Added by name as well: listed once, marked individual.
@@ -122,33 +123,9 @@ describe.skipIf(!url)("acknowledgements table", () => {
     expect(await expected()).toEqual([{ user_id: userId, individual: true }]);
     await client.query("DELETE FROM expected_signers WHERE document_id = $1", [docId]);
 
-    // Moving to an outstation that isn't selected takes them off the list.
-    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, humber]);
+    // Moving to a department that isn't selected takes them off the list.
+    await client.query("UPDATE users SET department_id = $2 WHERE id = $1", [userId, humber]);
     expect(await expected()).toEqual([]);
-  });
-
-  it("expects everyone on a document's distribution lists, alongside its outstations", async () => {
-    const { rows: lists } = await client.query("SELECT id, name FROM distribution_lists ORDER BY sort_order");
-    expect(lists.map((r) => r.name)).toEqual(["Engineering", "Purchasing", "Health and Safety", "Operations Managers"]);
-    const engineering = lists[0].id;
-    const expected = async () =>
-      (await client.query("SELECT user_id FROM document_signers WHERE document_id = $1", [docId])).rows.map((r) => r.user_id);
-
-    await client.query("INSERT INTO document_distribution_lists (document_id, list_id) VALUES ($1, $2)", [docId, engineering]);
-    expect(await expected()).toEqual([]);
-    await client.query("INSERT INTO user_distribution_lists (user_id, list_id) VALUES ($1, $2)", [userId, engineering]);
-    expect(await expected()).toEqual([userId]);
-
-    // On a ticked list and at a ticked outstation: still listed once.
-    const { rows: os } = await client.query("SELECT id FROM outstations WHERE name = 'Humber'");
-    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, os[0].id]);
-    await client.query("INSERT INTO document_outstations (document_id, outstation_id) VALUES ($1, $2)", [docId, os[0].id]);
-    expect(await expected()).toEqual([userId]);
-  });
-
-  it("protects the signer's distribution lists on a record", async () => {
-    const id = await sign();
-    await expectError("UPDATE acknowledgements SET signer_distribution_lists = 'Purchasing' WHERE id = $1", [id], /voided/);
   });
 
   it("has the three document categories and protects a record's category", async () => {

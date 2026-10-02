@@ -6,23 +6,23 @@ import {
   addSigners,
   createDocument,
   createPersonLink,
-  setDocumentOutstations,
+  setDocumentDepartments,
   updateDocument,
   updatePerson,
   voidAcknowledgement,
   type AccountLinkState,
   type AddPeopleState,
   type DocumentFormState,
-  type OutstationsFormState,
+  type DepartmentsFormState,
   type PersonFormState,
   type VoidState,
 } from "./actions";
 
-type Outstation = { id: number; name: string };
+type Department = { id: number; name: string };
 
 type Group = { id: number; name: string };
 
-/** A grid of tick boxes (or one-choice tick list when `single`) for outstations or distribution lists. */
+/** A grid of tick boxes (or one-choice tick list when `single`) for departments. */
 function GroupChecks({
   name,
   idPrefix,
@@ -62,46 +62,25 @@ function GroupChecks({
   );
 }
 
-function GroupPickers({
-  outstations,
-  lists,
-  selectedOutstations,
-  selectedLists,
-}: {
-  outstations: Group[];
-  lists: Group[];
-  selectedOutstations: number[];
-  selectedLists: number[];
-}) {
-  return (
-    <>
-      <p className="group-label">Outstations</p>
-      <GroupChecks name="outstation_ids" idPrefix="os" items={outstations} selected={selectedOutstations} />
-      {lists.length > 0 && (
-        <>
-          <p className="group-label">Distribution lists</p>
-          <GroupChecks name="distribution_ids" idPrefix="dl" items={lists} selected={selectedLists} />
-        </>
-      )}
-    </>
-  );
+function GroupPickers({ departments, selectedDepartments }: { departments: Group[]; selectedDepartments: number[] }) {
+  return <GroupChecks name="department_ids" idPrefix="os" items={departments} selected={selectedDepartments} />;
 }
 
-function OutstationSelect({
+function DepartmentSelect({
   id,
-  outstations,
+  departments,
   defaultValue,
   emptyLabel,
 }: {
   id: string;
-  outstations: Outstation[];
+  departments: Department[];
   defaultValue?: number | null;
   emptyLabel: string;
 }) {
   return (
-    <select id={id} name="outstation_id" defaultValue={defaultValue ?? ""}>
+    <select id={id} name="department_id" defaultValue={defaultValue ?? ""}>
       <option value="">{emptyLabel}</option>
-      {outstations.map((o) => (
+      {departments.map((o) => (
         <option key={o.id} value={o.id}>
           {o.name}
         </option>
@@ -110,30 +89,21 @@ function OutstationSelect({
   );
 }
 
-/** Which outstations and distribution lists need to acknowledge a document. */
+/** Which departments need to acknowledge a document. */
 export function GroupsForm({
   documentId,
-  outstations,
-  lists,
-  selectedOutstations,
-  selectedLists,
+  departments,
+  selectedDepartments,
 }: {
   documentId: string;
-  outstations: Group[];
-  lists: Group[];
-  selectedOutstations: number[];
-  selectedLists: number[];
+  departments: Group[];
+  selectedDepartments: number[];
 }) {
-  const [state, action, pending] = useActionState<OutstationsFormState, FormData>(setDocumentOutstations, {});
+  const [state, action, pending] = useActionState<DepartmentsFormState, FormData>(setDocumentDepartments, {});
   return (
     <form action={action}>
       <input type="hidden" name="document_id" value={documentId} />
-      <GroupPickers
-        outstations={outstations}
-        lists={lists}
-        selectedOutstations={selectedOutstations}
-        selectedLists={selectedLists}
-      />
+      <GroupPickers departments={departments} selectedDepartments={selectedDepartments} />
       {state.error && (
         <p className="notice bad" role="alert">
           {state.error}
@@ -149,7 +119,7 @@ export function GroupsForm({
           {pending ? "Saving…" : "Save"}
         </button>
         <span className="hint">
-          Everyone at a ticked outstation or on a ticked list needs to sign, including people who join later.
+          Everyone in a ticked department needs to sign, including people who join later.
         </span>
       </div>
     </form>
@@ -194,13 +164,11 @@ type DocumentValues = {
 
 export function DocumentForm({
   doc,
-  outstations,
-  lists = [],
+  departments,
   categories,
 }: {
   doc?: DocumentValues;
-  outstations?: Outstation[];
-  lists?: Group[];
+  departments?: Department[];
   categories: Group[];
 }) {
   const [state, action, pending] = useActionState<DocumentFormState, FormData>(
@@ -262,16 +230,15 @@ export function DocumentForm({
         placeholder="https://"
         defaultValue={doc?.location_url ?? ""}
       />
-      {!doc?.id && outstations && outstations.length > 0 && (
+      {!doc?.id && departments && departments.length > 0 && (
         <fieldset className="fieldset">
           <legend>
             Who needs to acknowledge this{" "}
             <span className="hint">
-              Everyone at a ticked outstation or on a ticked list will need to sign. You can also add individual
-              people next.
+              Everyone in a ticked department will need to sign. You can also add individual people next.
             </span>
           </legend>
-          <GroupPickers outstations={outstations} lists={lists} selectedOutstations={[]} selectedLists={[]} />
+          <GroupPickers departments={departments} selectedDepartments={[]} />
         </fieldset>
       )}
       <div className="actions">
@@ -285,12 +252,10 @@ export function DocumentForm({
 
 export function AddPeopleForm({
   documentId,
-  outstations = [],
-  lists = [],
+  departments = [],
 }: {
   documentId?: string;
-  outstations?: Outstation[];
-  lists?: Group[];
+  departments?: Department[];
 }) {
   const [state, action, pending] = useActionState<AddPeopleState, FormData>(
     documentId ? addSigners : addPeople,
@@ -307,36 +272,28 @@ export function AddPeopleForm({
       <label htmlFor="people">
         People
         <span className="hint">
-          One per line: <code>Name, email</code>, optionally with an outstation and distribution lists:{" "}
-          <code>Name, email, Ferrybridge, Engineering</code>. You can paste columns straight from a spreadsheet.
+          One per line: <code>Name, email</code>, optionally with a department:{" "}
+          <code>Name, email, Ferrybridge</code>. You can paste columns straight from a spreadsheet.
           New email addresses get a reader account.
         </span>
       </label>
       <textarea id="people" name="people" placeholder={"Sam Patel, sam.patel@example.com\nAlex Jones, alex.jones@example.com, Humber"} />
-      {outstations.length > 0 && (
+      {departments.length > 0 && (
         <>
           <p className="group-label">
-            Outstation{" "}
+            Department{" "}
             <span className="hint">
-              Pick one. It applies to anyone without an outstation yet; an outstation on a line takes priority.
+              Pick one. It applies to anyone without a department yet; a department on a line takes priority.
             </span>
           </p>
           <GroupChecks
-            name="outstation_id"
+            name="department_id"
             idPrefix={documentId ? "add-os" : "people-os"}
-            items={outstations}
+            items={departments}
             selected={[]}
             single
             noneLabel="Don't set"
           />
-        </>
-      )}
-      {lists.length > 0 && (
-        <>
-          <p className="group-label">
-            Distribution lists <span className="hint">Tick any that apply. People keep lists they&apos;re already on.</span>
-          </p>
-          <GroupChecks name="distribution_ids" idPrefix={documentId ? "add-dl" : "people-dl"} items={lists} selected={[]} />
         </>
       )}
       {state.error && (
@@ -401,18 +358,15 @@ type PersonValues = {
   name: string;
   email: string;
   employee_id: string | null;
-  outstation_id: number | null;
-  distribution_ids: number[];
+  department_id: number | null;
 };
 
 export function PersonEditForm({
   person,
-  outstations,
-  lists,
+  departments,
 }: {
   person: PersonValues;
-  outstations: Outstation[];
-  lists: Group[];
+  departments: Department[];
 }) {
   const [state, action, pending] = useActionState<PersonFormState, FormData>(updatePerson, {});
   return (
@@ -428,19 +382,14 @@ export function PersonEditForm({
           Employee ID <span className="hint">Optional. Never shown to other readers.</span>
         </label>
         <input id={`emp-${person.id}`} name="employee_id" type="text" defaultValue={person.employee_id ?? ""} />
-        <label htmlFor={`os-${person.id}`}>Outstation</label>
-        <OutstationSelect
+        <label htmlFor={`os-${person.id}`}>Department</label>
+        <DepartmentSelect
           id={`os-${person.id}`}
-          outstations={outstations}
-          defaultValue={person.outstation_id}
-          emptyLabel="No outstation"
+          departments={departments}
+          defaultValue={person.department_id}
+          emptyLabel="No department"
         />
-        {lists.length > 0 && (
-          <>
-            <p className="group-label">Distribution lists</p>
-            <GroupChecks name="distribution_ids" idPrefix={`pdl-${person.id}`} items={lists} selected={person.distribution_ids} />
-          </>
-        )}
+
         {state.error && (
           <p className="notice bad" role="alert">
             {state.error}

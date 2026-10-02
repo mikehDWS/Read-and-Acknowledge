@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { query } from "@/lib/db";
 import { formatDate, isOverdue } from "@/lib/format";
-import { listCategories, listDistributionLists, listOutstations } from "@/lib/outstations";
+import { listCategories, listDepartments } from "@/lib/departments";
 import { requireAdmin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Documents" };
@@ -15,17 +15,15 @@ type Row = {
   status: "open" | "closed";
   expected: number;
   signed: number;
-  outstations: string[];
-  lists: string[];
+  departments: string[];
   category: string | null;
 };
 
 export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
   await requireAdmin("/admin");
   const { category } = await searchParams;
-  const [outstations, lists, categories, allDocs] = await Promise.all([
-    listOutstations(),
-    listDistributionLists(),
+  const [departments, categories, allDocs] = await Promise.all([
+    listDepartments(),
     listCategories(),
     query<{ id: string; name: string; version_label: string | null }>(
       "SELECT id, name, version_label FROM documents ORDER BY lower(name)",
@@ -41,10 +39,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                JOIN acknowledgements a
                  ON a.document_id = es.document_id AND a.user_id = es.user_id AND a.voided_at IS NULL
               WHERE es.document_id = d.id)::int AS signed,
-            ARRAY(SELECT o.name FROM document_outstations dos JOIN outstations o ON o.id = dos.outstation_id
-                   WHERE dos.document_id = d.id ORDER BY o.sort_order, o.name) AS outstations,
-            ARRAY(SELECT dl.name FROM document_distribution_lists ddl JOIN distribution_lists dl ON dl.id = ddl.list_id
-                   WHERE ddl.document_id = d.id ORDER BY dl.sort_order, dl.name) AS lists
+            ARRAY(SELECT o.name FROM document_departments dos JOIN departments o ON o.id = dos.department_id
+                   WHERE dos.document_id = d.id ORDER BY o.sort_order, o.name) AS departments
        FROM documents d
        LEFT JOIN document_categories c ON c.id = d.category_id
       WHERE $1::text IS NULL
@@ -117,15 +113,12 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                       </span>
                     </td>
                     <td>
-                      {d.outstations.length === 0 && d.lists.length === 0 ? (
+                      {d.departments.length === 0 ? (
                         <span className="hint">Named people only</span>
+                      ) : d.departments.length === departments.length ? (
+                        "All departments"
                       ) : (
-                        <>
-                          {d.outstations.length === outstations.length && outstations.length > 0
-                            ? "All outstations"
-                            : d.outstations.join(", ")}
-                          {d.lists.length > 0 && <span className="hint">{d.lists.join(", ")}</span>}
-                        </>
+                        d.departments.join(", ")
                       )}
                     </td>
                     <td>
@@ -168,10 +161,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
             </select>
           </div>
           <div>
-            <label htmlFor="export-outstation">Outstation</label>
-            <select id="export-outstation" name="outstation" defaultValue="">
-              <option value="">All outstations</option>
-              {outstations.map((o) => (
+            <label htmlFor="export-department">Department</label>
+            <select id="export-department" name="department" defaultValue="">
+              <option value="">All departments</option>
+              {departments.map((o) => (
                 <option key={o.id} value={o.name}>
                   {o.name}
                 </option>
@@ -189,17 +182,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
               ))}
             </select>
           </div>
-          <div>
-            <label htmlFor="export-list">Distribution list</label>
-            <select id="export-list" name="list" defaultValue="">
-              <option value="">All distribution lists</option>
-              {lists.map((l) => (
-                <option key={l.id} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div />
           <div>
             <label htmlFor="from">Signed from</label>
             <input id="from" name="from" type="date" />
@@ -212,7 +195,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         <div className="actions">
           <button type="submit">Download CSV</button>
           <span className="hint">
-            Includes voided records, marked as voided. The outstation and lists are the ones each person had when they signed.
+            Includes voided records, marked as voided. The department is the one each person was in when they signed.
           </span>
         </div>
       </form>
