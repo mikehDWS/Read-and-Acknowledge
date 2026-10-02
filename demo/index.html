@@ -163,10 +163,10 @@ details[open] summary { margin-bottom: 4px; }
 .typed-sig { display: inline-block; font: italic 1.1rem "Segoe Script", "Brush Script MT", cursive; padding: 4px 8px; background: #ffffff; color: #111827; border: 1px solid var(--border); border-radius: 4px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 0.95rem; max-width: calc(100% - 32px); }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
-
 <div class="demo-bar">
   <div class="container demo-inner">
     <span class="demo-tag">Demo</span>
@@ -214,10 +214,12 @@ details[open] summary { margin-bottom: 4px; }
       { id: "u-sam", name: "Sam Patel", email: "sam.patel@example.com", role: "reader", hasPassword: true, employeeId: "E1042", department: "Ferrybridge" },
       { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber", manages: ["Humber"] },
       { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077", department: "Ferrybridge", manages: ["Ferrybridge"] },
-      { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber" },
+      { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber", supervisor: true },
       { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "", department: "Port Talbot" },
       { id: "u-kai", name: "Kai Morgan", email: "kai.morgan@example.com", role: "reader", hasPassword: true, employeeId: "E1103", department: "Fleet Control" },
       { id: "u-ella", name: "Ella Ward", email: "ella.ward@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Engineering" },
+      { id: "u-dave", name: "Dave Fitter", email: "", role: "reader", hasPassword: false, employeeId: "E2210", department: "Humber" },
+      { id: "u-lee", name: "Lee Barnes", email: "", role: "reader", hasPassword: false, employeeId: "", department: "Ferrybridge" },
     ];
     const docs = [
       { id: "d-infosec", category: "Internal Engineering", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), departments: ["Ferrybridge", "Humber", "Port Talbot", "Engineering", "Fleet Control"], signers: [] },
@@ -227,7 +229,7 @@ details[open] summary { margin-bottom: 4px; }
     ];
     const ack = (docId, userId, at, ip) => {
       const d = docs.find((x) => x.id === docId), u = users.find((x) => x.id === userId);
-      return { id: uid(), docId, userId, name: u.name, email: u.email, department: u.department, sigMethod: "typed", sigName: u.name, docName: d.name, category: d.category, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
+      return { id: uid(), docId, userId, name: u.name, email: u.email, department: u.department, sigMethod: "typed", sigName: u.name, briefedBy: "", docName: d.name, category: d.category, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
     };
     const acks = [
       ack("d-infosec", "u-priya", ago(2, 3), "203.0.113.24"),
@@ -236,6 +238,7 @@ details[open] summary { margin-bottom: 4px; }
       ack("d-hs", "u-priya", ago(3, 5), "203.0.113.24"),
       ack("d-hs", "u-tom", ago(3, 1), "203.0.113.51"),
       ack("d-conduct", "u-priya", ago(9, 4), "203.0.113.24"),
+      Object.assign(ack("d-hs", "u-dave", ago(2, 1), "198.51.100.40"), { briefedBy: "Tom Evans" }),
       ack("d-expenses", "u-alex", ago(60, 2), "198.51.100.7"),
       ack("d-expenses", "u-priya", ago(58, 6), "203.0.113.24"),
       ack("d-expenses", "u-tom", ago(57, 3), "203.0.113.51"),
@@ -247,7 +250,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   // ---------- state ----------
-  const KEY = "read-ack-demo-v6";
+  const KEY = "read-ack-demo-v7";
   let data, ui;
   function load() {
     try {
@@ -270,6 +273,13 @@ details[open] summary { margin-bottom: 4px; }
     const set = new Set(d.signers);
     data.users.forEach((u) => { if (viaDepartment(d, u)) set.add(u.id); });
     return [...set];
+  };
+  // Managers brief the departments they manage; supervisors brief their own.
+  const briefingDepts = (u) => {
+    if (!u) return [];
+    const set = new Set(u.manages || []);
+    if (u.supervisor && u.department) set.add(u.department);
+    return DEPARTMENTS.filter((x) => set.has(x));
   };
   const isExpected = (d, userId) => expectedIds(d).includes(userId);
   const signedCount = (d) => expectedIds(d).filter((s) => liveAck(d.id, s)).length;
@@ -327,7 +337,7 @@ details[open] summary { margin-bottom: 4px; }
   function upsertPeople(people, defaultDepartment) {
     let created = 0;
     const ids = people.map((p) => {
-      const found = data.users.find((u) => u.email.toLowerCase() === p.email);
+      const found = data.users.find((u) => (u.email || "").toLowerCase() === p.email);
       if (found) {
         if (p.department) found.department = p.department;
         else if (!found.department && defaultDepartment) found.department = defaultDepartment;
@@ -348,11 +358,11 @@ details[open] summary { margin-bottom: 4px; }
     return t;
   }
   function buildCsv(docId, from, to, department, category) {
-    const header = ["acknowledgement_id", "document", "category", "version", "name", "email", "department", "employee_id", "acknowledged_at_utc", "statement", "signature", "typed_name", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
+    const header = ["acknowledgement_id", "document", "category", "version", "name", "email", "department", "employee_id", "acknowledged_at_utc", "statement", "signature", "typed_name", "briefed_by", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
     const rows = data.acks
       .filter((a) => (!docId || a.docId === docId) && (!department || a.department === department) && (!category || a.category === category) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map((a) => [a.id, a.docName, a.category, a.version, a.name, a.email, a.department, (userById(a.userId) || {}).employeeId, a.at, a.statement || STATEMENT, a.sigMethod || "", a.sigName || "", a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
+      .map((a) => [a.id, a.docName, a.category, a.version, a.name, a.email, a.department, (userById(a.userId) || {}).employeeId, a.at, a.statement || STATEMENT, a.sigMethod || "", a.sigName || "", a.briefedBy || "", a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
     return { text: [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), count: rows.length };
   }
 
@@ -362,7 +372,7 @@ details[open] summary { margin-bottom: 4px; }
     const link = (view, label) => `<button type="button" class="link-button${ui.view === view ? " current" : ""}" data-go="${view}">${label}</button>`;
     let nav = "";
     if (u) {
-      nav = `<nav aria-label="Main">${link("my", "My documents")}${(u.manages || []).length ? link("team", "My team") : ""}${u.role === "admin" ? link("admin", "Documents") + link("people", "People") : ""}
+      nav = `<nav aria-label="Main">${link("my", "My documents")}${(u.manages || []).length ? link("team", "My team") : ""}${briefingDepts(u).length ? link("brief", "Brief staff") : ""}${u.role === "admin" ? link("admin", "Documents") + link("people", "People") : ""}
         <span class="who" title="${esc(u.email)}">${esc(u.name)}</span>
         <button type="button" class="link-button" data-action="signout">Sign out</button></nav>`;
     }
@@ -579,7 +589,7 @@ details[open] summary { margin-bottom: 4px; }
 
       <section class="card" aria-labelledby="share-h">
         <h2 id="share-h">Share link</h2>
-        <p class="hint">Send this link to the people below by email, chat or intranet. They sign in, tick the box and confirm. Only people on this document's list can sign.</p>
+        <p class="hint">Send this link to the people below by email, chat or intranet. They sign in, sign and confirm. Staff without an account can sign at a briefing. Only people on this document's list can sign.</p>
         <div class="copy-row"><input type="text" readonly id="sign-link" value="${link}" aria-label="Sign link"><button type="button" class="secondary" data-action="copy" data-target="sign-link">Copy</button></div>
         <div class="actions">
           <button type="button" class="secondary" data-action="toggle-status" data-id="${d.id}">${d.status === "open" ? "Close link (stop accepting signatures)" : "Reopen link"}</button>
@@ -604,10 +614,10 @@ details[open] summary { margin-bottom: 4px; }
         <tbody>${signers.map((u) => {
           const a = liveAck(d.id, u.id);
           const via = viaDepartment(d, u);
-          return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span></td>
+          return `<tr><td>${esc(u.name)}<span class="hint">${u.email ? esc(u.email) : "No login: signs at a briefing"}</span></td>
             <td>${u.department ? esc(u.department) : `<span class="hint">No department</span>`}${via ? "" : `<span class="hint">Added by name</span>`}</td>
             <td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : overdue ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Outstanding</span>`}
-              ${!u.hasPassword ? `<div class="row-actions" style="margin-top:6px"><span class="badge muted">No password set yet</span>${linkCell(u)}</div>` : ""}</td>
+              ${!u.hasPassword && u.email ? `<div class="row-actions" style="margin-top:6px"><span class="badge muted">No password set yet</span>${linkCell(u)}</div>` : ""}</td>
             <td>${via ? `<span class="hint">Via ${esc(u.department)}</span>` : `<button type="button" class="link-button" data-action="remove-signer" data-id="${u.id}" aria-label="Remove ${esc(u.name)} from this document">Remove</button>`}</td></tr>`;
         }).join("")}</tbody></table></div>`}
 
@@ -616,7 +626,7 @@ details[open] summary { margin-bottom: 4px; }
       <h2>Acknowledgement records (${acks.length})</h2>
       ${acks.length === 0 ? `<p>No acknowledgements yet.</p>` : `<div class="table-wrap"><table>
         <thead><tr><th scope="col">Name</th><th scope="col">Signed</th><th scope="col">Version</th><th scope="col">Signature</th><th scope="col">IP address</th><th scope="col">Record</th></tr></thead>
-        <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}<span class="hint">${esc(a.email)}</span>${a.department ? `<span class="hint">${esc(a.department)}</span>` : ""}</td>
+        <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}${a.email ? `<span class="hint">${esc(a.email)}</span>` : ""}${a.department ? `<span class="hint">${esc(a.department)}</span>` : ""}${a.briefedBy ? `<span class="hint">Briefed by ${esc(a.briefedBy)}</span>` : ""}</td>
           <td>${fmtDateTime(a.at)}</td><td>${esc(a.version || "—")}</td>
           <td>${a.sigImage ? `<img class="signature-img" src="${a.sigImage}" alt="Signature of ${esc(a.name)}">` : a.sigName ? `<span class="typed-sig">${esc(a.sigName)}</span>` : ""}${a.sigMethod === "typed" ? `<span class="hint">Typed</span>` : ""}</td>
           <td>${esc(a.ip || "—")}</td>
@@ -647,12 +657,12 @@ details[open] summary { margin-bottom: 4px; }
   function viewPeople() {
     const q = (ui.q || "").toLowerCase();
     const osFilter = ui.qDepartment || "";
-    const list = data.users.filter((u) => (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+    const list = data.users.filter((u) => (!q || u.name.toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q))
         && (!osFilter || (osFilter === "none" ? !u.department : u.department === osFilter)))
       .sort((a, b) => a.name.localeCompare(b.name));
     const admin = me();
     return `<div class="fade"><h1>People</h1>
-      <p class="lead">Everyone who signs in: readers and admins. New people need a set-password link before they can sign in. v1 doesn't send email, so copy the link and share it yourself.</p>
+      <p class="lead">Everyone who signs: readers, admins, and staff without a login who sign at briefings. New people need a set-password link before they can sign in. v1 doesn't send email, so copy the link and share it yourself.</p>
       <form class="copy-row" data-form="search" role="search" style="margin:16px 0">
         <label for="q" class="visually-hidden">Search people</label>
         <input id="q" name="q" type="search" placeholder="Search by name or email" value="${esc(ui.q || "")}">
@@ -664,15 +674,16 @@ details[open] summary { margin-bottom: 4px; }
         <thead><tr><th scope="col">Name</th><th scope="col">Department</th><th scope="col">Account</th><th scope="col">Role</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>${list.map((u) => {
           const docs = data.docs.filter((d) => isExpected(d, u.id)).length;
-          return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span>${u.employeeId ? `<span class="hint">ID ${esc(u.employeeId)}</span>` : ""}<span class="hint">${docs} ${docs === 1 ? "document" : "documents"}</span></td>
-            <td>${u.department ? esc(u.department) : `<span class="hint">No department</span>`}${(u.manages || []).length ? `<span class="hint">Manages ${esc(u.manages.join(", "))}</span>` : ""}</td>
-            <td>${u.hasPassword ? `<span class="badge ok">Active</span>` : `<span class="badge muted">No password set</span>`}<div style="margin-top:6px">${linkCell(u)}</div></td>
+          return `<tr><td>${esc(u.name)}<span class="hint">${u.email ? esc(u.email) : "No email"}</span>${u.employeeId ? `<span class="hint">ID ${esc(u.employeeId)}</span>` : ""}<span class="hint">${docs} ${docs === 1 ? "document" : "documents"}</span></td>
+            <td>${u.department ? esc(u.department) : `<span class="hint">No department</span>`}${u.supervisor ? `<span class="hint">Supervisor</span>` : ""}${(u.manages || []).length ? `<span class="hint">Manages ${esc(u.manages.join(", "))}</span>` : ""}</td>
+            <td>${!u.email ? `<span class="badge muted">No login</span><span class="hint">Signs at briefings</span>` : u.hasPassword ? `<span class="badge ok">Active</span>` : `<span class="badge muted">No password set</span>`}${u.email ? `<div style="margin-top:6px">${linkCell(u)}</div>` : ""}</td>
             <td>${u.role === "admin" ? "Admin" : "Reader"}${u.id !== admin.id ? `<br><button type="button" class="link-button" data-action="toggle-role" data-id="${u.id}">${u.role === "admin" ? "Remove admin" : "Make admin"}</button>` : ""}</td>
             <td><details><summary>Edit</summary><form data-form="person" data-id="${u.id}">
               <label for="pn-${u.id}">Name</label><input id="pn-${u.id}" name="name" type="text" required value="${esc(u.name)}">
-              <label for="pe-${u.id}">Email</label><input id="pe-${u.id}" name="email" type="email" required value="${esc(u.email)}">
+              <label for="pe-${u.id}">Email <span class="hint">Optional for people who only sign at briefings. Needed to sign in.</span></label><input id="pe-${u.id}" name="email" type="email" value="${esc(u.email)}">
               <label for="pi-${u.id}">Employee ID <span class="hint">Optional. Never shown to other readers.</span></label><input id="pi-${u.id}" name="employeeId" type="text" value="${esc(u.employeeId)}">
               <label for="po-${u.id}">Department</label><select id="po-${u.id}" name="department">${departmentOptions(u.department, "No department")}</select>
+              <label class="check-item" for="ps-${u.id}" style="margin-top:12px"><input type="checkbox" id="ps-${u.id}" name="supervisor" value="yes"${u.supervisor ? " checked" : ""}> Supervisor <span class="hint">Can brief their own department's staff in person.</span></label>
               <p class="group-label">Manages <span class="hint">Managers see who in these departments still needs to sign.</span></p>${ticks(DEPARTMENTS, "manages", "mg-" + u.id, u.manages || [])}
               ${flash && flash.form === "person-" + u.id ? `<p class="notice ${flash.ok ? "ok" : "bad"}">${esc(flash.text)}</p>` : ""}
               <div class="actions"><button type="submit">Save</button></div></form></details></td></tr>`;
@@ -720,10 +731,13 @@ details[open] summary { margin-bottom: 4px; }
       ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111827"; ctx.fillStyle = "#111827";
     };
     const refresh = () => {
-      document.getElementById("confirm-btn").disabled = !pad.data || (pad.mode === "typed" && !pad.typed.trim());
+      const who = document.getElementById("brief-person"), newName = document.getElementById("brief-new-name");
+      const personReady = !who || (who.value && (who.value !== "new" || (newName && newName.value.trim())));
+      document.getElementById("confirm-btn").disabled = !personReady || !pad.data || (pad.mode === "typed" && !pad.typed.trim());
       document.getElementById("sig-clear").disabled = pad.mode !== "drawn" || !pad.data;
     };
     reset();
+    pad.refresh = refresh;
     let last = null;
     const pt = (e) => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
     c.addEventListener("pointerdown", (e) => { if (pad.mode !== "drawn") return; c.setPointerCapture(e.pointerId); last = pt(e); ctx.beginPath(); ctx.arc(last.x, last.y, 1.2, 0, Math.PI * 2); ctx.fill(); });
@@ -770,11 +784,82 @@ details[open] summary { margin-bottom: 4px; }
           <p class="hint" style="margin-top:-8px">${esc([d.category, d.version && "Version " + d.version, d.due && "Due " + fmtDate(d.due)].filter(Boolean).join(" · "))}</p>
           <p><strong>${signed} of ${people.length} signed</strong>${signed < people.length && late ? ` <span class="badge bad">Overdue</span>` : ""}</p>
           <div class="table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Department</th><th scope="col">Status</th></tr></thead><tbody>
-          ${people.sort((a, b) => !!liveAck(d.id, a.id) - !!liveAck(d.id, b.id) || a.name.localeCompare(b.name)).map((p) => { const a = liveAck(d.id, p.id); return `<tr><td>${esc(p.name)}<span class="hint">${esc(p.email)}</span></td><td>${esc(p.department)}</td><td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : late ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Needs to sign</span>`}</td></tr>`; }).join("")}
+          ${people.sort((a, b) => !!liveAck(d.id, a.id) - !!liveAck(d.id, b.id) || a.name.localeCompare(b.name)).map((p) => { const a = liveAck(d.id, p.id); return `<tr><td>${esc(p.name)}<span class="hint">${p.email ? esc(p.email) : "No login: brief them in person"}</span></td><td>${esc(p.department)}</td><td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : late ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Needs to sign</span>`}</td></tr>`; }).join("")}
           </tbody></table></div>
           ${signed < people.length ? `<details style="margin-top:12px"><summary>Sign link to send to your team</summary><div class="copy-row" style="margin-top:8px"><input type="text" readonly id="tl-${d.id}" value="${BASE}/sign/${d.token}" aria-label="Sign link for ${esc(d.name)}"><button type="button" class="secondary" data-action="copy" data-target="tl-${d.id}">Copy</button></div></details>` : ""}
         </section>`;
       }).join("")}</div>`;
+  }
+
+  // ---------- briefings (managers and supervisors) ----------
+  const briefPeople = (d, depts) => data.users.filter((p) => depts.includes(p.department))
+    .sort((a, b) => DEPARTMENTS.indexOf(a.department) - DEPARTMENTS.indexOf(b.department) || a.name.localeCompare(b.name));
+  function viewBrief() {
+    const u = me(), depts = briefingDepts(u);
+    const docs = data.docs.filter((d) => d.status === "open" && ((d.departments || []).some((x) => depts.includes(x)) || expectedIds(d).some((id) => depts.includes((userById(id) || {}).department))))
+      .sort((a, b) => String(a.due || "9").localeCompare(String(b.due || "9")));
+    return `<div class="fade"><h1>Brief staff</h1>
+      <p class="lead">Brief a document in person, then hand your device to each person to sign. Use this for staff in ${esc(depts.join(", "))}, including anyone without an account.</p>
+      ${docs.length === 0 ? `<div class="card"><p>No open documents for your departments.</p></div>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Document</th><th scope="col">Due</th><th scope="col">Your departments</th></tr></thead>
+        <tbody>${docs.map((d) => {
+          const people = expectedIds(d).map(userById).filter((p) => p && depts.includes(p.department));
+          const signed = people.filter((p) => liveAck(d.id, p.id)).length;
+          return `<tr><td><button type="button" class="link-button" data-action="open-brief" data-id="${d.id}">${esc(d.name)}</button><span class="hint">${esc([d.category, d.version && "Version " + d.version].filter(Boolean).join(" · "))}</span></td>
+            <td>${d.due ? fmtDate(d.due) : "—"}${signed < people.length && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</td>
+            <td>${signed} of ${people.length} signed</td></tr>`;
+        }).join("")}</tbody></table></div>`}
+    </div>`;
+  }
+  function viewBriefDoc() {
+    const u = me(), depts = briefingDepts(u), d = docById(ui.docId);
+    if (!d) return viewNotFound();
+    const people = briefPeople(d, depts);
+    const outstanding = people.filter((p) => !liveAck(d.id, p.id)), signed = people.filter((p) => liveAck(d.id, p.id));
+    const f = flash && flash.form === "brief" ? flash : null;
+    return `<div class="fade"><p><button type="button" class="link-button" data-go="brief">← All briefings</button></p>
+      <h1>${esc(d.name)}</h1>
+      <dl class="meta">
+        ${d.category ? `<dt>Category</dt><dd>${esc(d.category)}</dd>` : ""}
+        ${d.version ? `<dt>Version</dt><dd>${esc(d.version)}</dd>` : ""}
+        ${d.due ? `<dt>Due</dt><dd>${fmtDate(d.due)}</dd>` : ""}
+        <dt>Briefed by</dt><dd>${esc(u.name)}</dd>
+      </dl>
+      ${d.description ? `<p style="white-space:pre-line">${esc(d.description)}</p>` : ""}
+      ${d.url ? `<p><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Open the document</a> <span class="hint">Opens in a new tab. (Sample link in this demo.)</span></p>` : ""}
+      ${d.status !== "open" ? `<p class="notice warn">This document is no longer accepting acknowledgements.</p>` : `<div class="card wide-narrow">
+        <h2 style="margin-top:0">Sign after the briefing</h2>
+        <p class="hint">Once you've briefed the document, hand your device to each person in turn. The record shows you gave the briefing.</p>
+        ${f && f.ok ? `<p class="notice ok" role="status"><strong>${esc(f.text)}</strong> Hand the device to the next person.</p>` : ""}
+        ${f && !f.ok ? `<p class="notice bad">${esc(f.text)}</p>` : ""}
+        <form data-form="brief">
+          <label for="brief-person">Who is signing?</label>
+          <select id="brief-person" name="person"><option value="">Choose a person</option>
+            ${outstanding.map((p) => `<option value="${p.id}">${esc(p.name)} (${esc(p.department)})${p.email ? "" : " · no account"}${isExpected(d, p.id) ? "" : " · not on the list yet"}</option>`).join("")}
+            <option value="new">Someone not listed…</option></select>
+          <div id="brief-new" class="grid-2" hidden>
+            <div><label for="brief-new-name">Full name</label><input id="brief-new-name" name="newName" type="text"></div>
+            <div><label for="brief-new-dept">Department</label><select id="brief-new-dept" name="newDept">${depts.map((x) => `<option>${esc(x)}</option>`).join("")}</select></div>
+            <div><label for="brief-new-id">Employee ID <span class="hint">Optional</span></label><input id="brief-new-id" name="newEmployeeId" type="text"></div>
+            <p class="hint" style="align-self:end">They're added to People without a login.</p>
+          </div>
+          <p class="statement">${STATEMENT}</p>
+          <div id="typed-wrap" hidden><label for="typed-name">Type your full name <span class="hint">It appears below as your signature.</span></label>
+            <input id="typed-name" type="text" autocomplete="off"></div>
+          <div class="signature-label" id="sig-label">Sign in the box</div>
+          <canvas id="sig-pad" class="signature-pad" style="height:180px" role="img" aria-labelledby="sig-label" aria-describedby="sig-help"></canvas>
+          <div class="actions" style="margin-top:8px">
+            <button type="button" class="secondary" id="sig-clear" disabled>Clear</button>
+            <button type="button" class="link-button" id="sig-mode">Can't draw? Type your name instead</button>
+          </div>
+          <p id="sig-help" class="hint">Use your finger, a stylus or your mouse.</p>
+          <button type="submit" id="confirm-btn" disabled>Confirm</button>
+        </form></div>`}
+      <h2>Signed in your departments (${signed.length})</h2>
+      ${signed.length === 0 ? `<p class="hint">Nobody in your departments has signed yet.</p>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Department</th><th scope="col">Signed</th><th scope="col">How</th></tr></thead>
+        <tbody>${signed.map((p) => { const a = liveAck(d.id, p.id); return `<tr><td>${esc(p.name)}</td><td>${esc(p.department)}</td><td>${fmtDateTime(a.at)}</td><td>${a.briefedBy ? `Briefed by ${esc(a.briefedBy)}` : "Signed online"}</td></tr>`; }).join("")}</tbody></table></div>`}
+    </div>`;
   }
 
   // ---------- render ----------
@@ -783,7 +868,8 @@ details[open] summary { margin-bottom: 4px; }
     if (!u && ui.view !== "login" && ui.view !== "account") ui.view = "login";
     if (u && u.role !== "admin" && ["admin", "doc", "new", "people"].includes(ui.view)) ui.view = "my";
     if (u && ui.view === "team" && !(u.manages || []).length) ui.view = "my";
-    const views = { login: viewLogin, my: viewMy, sign: viewSign, admin: viewAdmin, doc: viewDoc, new: viewNew, people: viewPeople, account: viewAccount, team: viewTeam };
+    if (u && ["brief", "brief-doc"].includes(ui.view) && !briefingDepts(u).length) ui.view = "my";
+    const views = { login: viewLogin, my: viewMy, sign: viewSign, admin: viewAdmin, doc: viewDoc, new: viewNew, people: viewPeople, account: viewAccount, team: viewTeam, brief: viewBrief, "brief-doc": viewBriefDoc };
     document.getElementById("header").innerHTML = header();
     document.getElementById("main").innerHTML = (views[ui.view] || viewNotFound)();
     setupPad();
@@ -791,7 +877,7 @@ details[open] summary { margin-bottom: 4px; }
     sel.innerHTML = `<option value="">Signed out</option>` + data.users.filter((x) => x.hasPassword)
       .map((x) => `<option value="${x.id}"${x.id === ui.userId ? " selected" : ""}>${esc(x.name)} (${x.role === "admin" ? "admin" : "reader"})</option>`).join("");
     if (!u) sel.value = "";
-    const t = { login: "Sign in", my: "My documents", sign: "Acknowledge a document", admin: "Documents", doc: "Document", new: "New document", people: "People", account: "Set your password", team: "My team" }[ui.view];
+    const t = { login: "Sign in", my: "My documents", sign: "Acknowledge a document", admin: "Documents", doc: "Document", new: "New document", people: "People", account: "Set your password", team: "My team", brief: "Brief staff", "brief-doc": "Brief a document" }[ui.view];
     document.title = (t ? t + " · " : "") + "Read and Acknowledge Demo";
     flash = null;
   }
@@ -818,6 +904,7 @@ details[open] summary { margin-bottom: 4px; }
       case "quick-login": return signInAs(id);
       case "open-sign": return go("sign", { token: el.getAttribute("data-token"), justSigned: false });
       case "open-doc": return go("doc", { docId: id });
+      case "open-brief": return go("brief-doc", { docId: id });
       case "toggle-status": {
         const d = docById(id); d.status = d.status === "open" ? "closed" : "open";
         save(); render(); return toast(d.status === "closed" ? "Link closed. No more signatures accepted." : "Link reopened.");
@@ -861,6 +948,14 @@ details[open] summary { margin-bottom: 4px; }
   });
 
   document.addEventListener("change", (e) => {
+    if (e.target.id === "brief-person") {
+      document.getElementById("brief-new").hidden = e.target.value !== "new";
+      const opt = e.target.selectedOptions[0];
+      document.getElementById("typed-name").placeholder = e.target.value && e.target.value !== "new" ? opt.textContent.split(" (")[0] : "";
+      if (pad.refresh) pad.refresh();
+      if (e.target.value === "new") document.getElementById("brief-new-name").focus();
+      return;
+    }
     if (e.target.id === "demo-as") {
       const v = e.target.value;
       if (!v) { ui.userId = null; return go("login"); }
@@ -868,6 +963,8 @@ details[open] summary { margin-bottom: 4px; }
       signInAs(v, keepSign ? "sign" : undefined);
     }
   });
+
+  document.addEventListener("input", (e) => { if (e.target.id === "brief-new-name" && pad.refresh) pad.refresh(); });
 
   document.getElementById("demo-reset").addEventListener("click", () => {
     try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
@@ -884,7 +981,7 @@ details[open] summary { margin-bottom: 4px; }
 
     if (kind === "login") {
       const email = val("email").toLowerCase();
-      const u = data.users.find((x) => x.email.toLowerCase() === email);
+      const u = email && data.users.find((x) => (x.email || "").toLowerCase() === email);
       if (!email || !val("password")) { flash = "Enter your email and password."; return render(); }
       if (!u || !u.hasPassword) { flash = "That email and password don't match an account."; return render(); }
       return signInAs(u.id);
@@ -896,6 +993,26 @@ details[open] summary { margin-bottom: 4px; }
         data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, department: u.department || "", sigMethod: pad.mode, sigName: pad.mode === "typed" ? pad.typed.trim() : "", sigImage: pad.data, docName: d.name, category: d.category || "", version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
       }
       return go("sign", { justSigned: true });
+    }
+    if (kind === "brief") {
+      if (!pad.data) return;
+      const b = me(), d = docById(ui.docId), depts = briefingDepts(b);
+      let p;
+      if (val("person") === "new") {
+        if (!val("newName")) { flash = { form: "brief", text: "Enter the person's full name." }; return render(); }
+        if (!depts.includes(val("newDept"))) { flash = { form: "brief", text: "Choose one of your departments." }; return render(); }
+        p = { id: "u-" + uid(), name: val("newName"), email: "", role: "reader", hasPassword: false, employeeId: val("newEmployeeId"), department: val("newDept") };
+        data.users.push(p);
+      } else {
+        p = userById(val("person"));
+        if (!p || !depts.includes(p.department)) { flash = { form: "brief", text: "You can only brief people in your departments." }; return render(); }
+      }
+      if (liveAck(d.id, p.id)) { flash = { form: "brief", text: "This person has already signed this document." }; return render(); }
+      if (!isExpected(d, p.id)) d.signers.push(p.id);
+      const at = new Date().toISOString();
+      data.acks.push({ id: uid(), docId: d.id, userId: p.id, name: p.name, email: p.email, department: p.department || "", sigMethod: pad.mode, sigName: pad.mode === "typed" ? pad.typed.trim() : "", sigImage: pad.data, briefedBy: b.name, docName: d.name, category: d.category || "", version: d.version, at, ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
+      flash = { form: "brief", ok: true, text: `Signed by ${p.name} on ${fmtDateTime(at)}.` };
+      save(); render(); return;
     }
     if (kind === "doc-new" || kind === "doc-edit") {
       const name = val("name"), url = val("url");
@@ -951,9 +1068,10 @@ details[open] summary { margin-bottom: 4px; }
     if (kind === "person") {
       const u = userById(form.getAttribute("data-id")), email = val("email").toLowerCase();
       if (!val("name")) { flash = { form: "person-" + u.id, text: "Enter a name." }; return render(); }
-      if (!EMAIL_RE.test(email)) { flash = { form: "person-" + u.id, text: "Enter a valid email address." }; return render(); }
-      if (data.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email)) { flash = { form: "person-" + u.id, text: "Someone else already uses that email address." }; return render(); }
-      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId"), department: val("department"), manages: f.getAll("manages").map(String) });
+      if (email && !EMAIL_RE.test(email)) { flash = { form: "person-" + u.id, text: "Enter a valid email address." }; return render(); }
+      if (!email && u.hasPassword) { flash = { form: "person-" + u.id, text: "This person signs in with their email, so it can't be removed." }; return render(); }
+      if (email && data.users.some((x) => x.id !== u.id && (x.email || "").toLowerCase() === email)) { flash = { form: "person-" + u.id, text: "Someone else already uses that email address." }; return render(); }
+      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId"), department: val("department"), supervisor: f.get("supervisor") === "yes", manages: f.getAll("manages").map(String) });
       save(); render(); return toast("Saved.");
     }
     if (kind === "account") {
