@@ -155,6 +155,12 @@ details[open] summary { margin-bottom: 4px; }
 .tabs .tab { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--muted); font-weight: 400; padding: 8px 14px; margin-bottom: -1px; }
 .tabs .tab:hover:not(:disabled) { background: none; color: var(--text); }
 .tabs .tab.current { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.statement { font-weight: 600; font-size: 1.05rem; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--bg); border-radius: 4px; margin: 20px 0 12px; }
+.signature-label { font-weight: 600; margin: 16px 0 4px; }
+.signature-pad { display: block; width: 100%; border: 2px dashed var(--border); border-radius: 8px; background: #ffffff; touch-action: none; cursor: crosshair; }
+.signature-pad.typed { cursor: default; border-style: solid; }
+.signature-img { display: block; height: 48px; max-width: 180px; background: #ffffff; border: 1px solid var(--border); border-radius: 4px; }
+.typed-sig { display: inline-block; font: italic 1.1rem "Segoe Script", "Brush Script MT", cursive; padding: 4px 8px; background: #ffffff; color: #111827; border: 1px solid var(--border); border-radius: 4px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 0.95rem; max-width: calc(100% - 32px); }
 </style>
@@ -182,7 +188,7 @@ details[open] summary { margin-bottom: 4px; }
 
   // ---------- helpers ----------
   const DAY = 86400000;
-  const STATEMENT = "I have read and understood this document.";
+  const STATEMENT = "I am signing to confirm I understand and will apply the contents of the document being briefed.";
   const BASE = "https://acknowledge.example.com";
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const tz = "Europe/London";
@@ -206,8 +212,8 @@ details[open] summary { margin-bottom: 4px; }
     const users = [
       { id: "u-jo", name: "Jo Admin", email: "jo.admin@example.com", role: "admin", hasPassword: true, employeeId: "E1001", department: "Head Office" },
       { id: "u-sam", name: "Sam Patel", email: "sam.patel@example.com", role: "reader", hasPassword: true, employeeId: "E1042", department: "Ferrybridge" },
-      { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber" },
-      { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077", department: "Ferrybridge" },
+      { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber", manages: ["Humber"] },
+      { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077", department: "Ferrybridge", manages: ["Ferrybridge"] },
       { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "", department: "Humber" },
       { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "", department: "Port Talbot" },
       { id: "u-kai", name: "Kai Morgan", email: "kai.morgan@example.com", role: "reader", hasPassword: true, employeeId: "E1103", department: "Fleet Control" },
@@ -221,7 +227,7 @@ details[open] summary { margin-bottom: 4px; }
     ];
     const ack = (docId, userId, at, ip) => {
       const d = docs.find((x) => x.id === docId), u = users.find((x) => x.id === userId);
-      return { id: uid(), docId, userId, name: u.name, email: u.email, department: u.department, docName: d.name, category: d.category, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
+      return { id: uid(), docId, userId, name: u.name, email: u.email, department: u.department, sigMethod: "typed", sigName: u.name, docName: d.name, category: d.category, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
     };
     const acks = [
       ack("d-infosec", "u-priya", ago(2, 3), "203.0.113.24"),
@@ -241,7 +247,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   // ---------- state ----------
-  const KEY = "read-ack-demo-v5";
+  const KEY = "read-ack-demo-v6";
   let data, ui;
   function load() {
     try {
@@ -342,11 +348,11 @@ details[open] summary { margin-bottom: 4px; }
     return t;
   }
   function buildCsv(docId, from, to, department, category) {
-    const header = ["acknowledgement_id", "document", "category", "version", "name", "email", "department", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
+    const header = ["acknowledgement_id", "document", "category", "version", "name", "email", "department", "employee_id", "acknowledged_at_utc", "statement", "signature", "typed_name", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
     const rows = data.acks
       .filter((a) => (!docId || a.docId === docId) && (!department || a.department === department) && (!category || a.category === category) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map((a) => [a.id, a.docName, a.category, a.version, a.name, a.email, a.department, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
+      .map((a) => [a.id, a.docName, a.category, a.version, a.name, a.email, a.department, (userById(a.userId) || {}).employeeId, a.at, a.statement || STATEMENT, a.sigMethod || "", a.sigName || "", a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
     return { text: [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), count: rows.length };
   }
 
@@ -356,7 +362,7 @@ details[open] summary { margin-bottom: 4px; }
     const link = (view, label) => `<button type="button" class="link-button${ui.view === view ? " current" : ""}" data-go="${view}">${label}</button>`;
     let nav = "";
     if (u) {
-      nav = `<nav aria-label="Main">${link("my", "My documents")}${u.role === "admin" ? link("admin", "Documents") + link("people", "People") : ""}
+      nav = `<nav aria-label="Main">${link("my", "My documents")}${(u.manages || []).length ? link("team", "My team") : ""}${u.role === "admin" ? link("admin", "Documents") + link("people", "People") : ""}
         <span class="who" title="${esc(u.email)}">${esc(u.name)}</span>
         <button type="button" class="link-button" data-action="signout">Sign out</button></nav>`;
     }
@@ -421,9 +427,18 @@ details[open] summary { margin-bottom: 4px; }
     else if (!expected) body = `<p class="notice warn">You're not on the list for this document. If you think you should be, contact your admin.</p>`;
     else if (d.status === "closed") body = `<p class="notice warn">This document is no longer accepting acknowledgements.</p>`;
     else body = `<form data-form="sign">
-        <label class="checkbox" for="agree"><input type="checkbox" id="agree" name="agree"><span>${STATEMENT}</span></label>
+        <p class="statement">${STATEMENT}</p>
+        <div id="typed-wrap" hidden><label for="typed-name">Type your full name <span class="hint">It appears below as your signature.</span></label>
+          <input id="typed-name" type="text" autocomplete="name" placeholder="${esc(u.name)}"></div>
+        <div class="signature-label" id="sig-label">Sign in the box</div>
+        <canvas id="sig-pad" class="signature-pad" style="height:180px" role="img" aria-labelledby="sig-label" aria-describedby="sig-help"></canvas>
+        <div class="actions" style="margin-top:8px">
+          <button type="button" class="secondary" id="sig-clear" disabled>Clear</button>
+          <button type="button" class="link-button" id="sig-mode">Can't draw? Type your name instead</button>
+        </div>
+        <p id="sig-help" class="hint">Use your finger, a stylus or your mouse.</p>
         <button type="submit" id="confirm-btn" disabled aria-describedby="confirm-hint">Confirm</button>
-        <p id="confirm-hint" class="hint">Your name, the date and time are recorded when you confirm. You can't undo this yourself.</p>
+        <p id="confirm-hint" class="hint">Your signature, name, the date and time are recorded when you confirm. You can't undo this yourself.</p>
       </form>`;
     return `<div class="card wide-narrow fade">
       <h1>${esc(d.name)}</h1>
@@ -600,9 +615,11 @@ details[open] summary { margin-bottom: 4px; }
 
       <h2>Acknowledgement records (${acks.length})</h2>
       ${acks.length === 0 ? `<p>No acknowledgements yet.</p>` : `<div class="table-wrap"><table>
-        <thead><tr><th scope="col">Name</th><th scope="col">Signed</th><th scope="col">Version</th><th scope="col">IP address</th><th scope="col">Record</th></tr></thead>
+        <thead><tr><th scope="col">Name</th><th scope="col">Signed</th><th scope="col">Version</th><th scope="col">Signature</th><th scope="col">IP address</th><th scope="col">Record</th></tr></thead>
         <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}<span class="hint">${esc(a.email)}</span>${a.department ? `<span class="hint">${esc(a.department)}</span>` : ""}</td>
-          <td>${fmtDateTime(a.at)}</td><td>${esc(a.version || "—")}</td><td>${esc(a.ip || "—")}</td>
+          <td>${fmtDateTime(a.at)}</td><td>${esc(a.version || "—")}</td>
+          <td>${a.sigImage ? `<img class="signature-img" src="${a.sigImage}" alt="Signature of ${esc(a.name)}">` : a.sigName ? `<span class="typed-sig">${esc(a.sigName)}</span>` : ""}${a.sigMethod === "typed" ? `<span class="hint">Typed</span>` : ""}</td>
+          <td>${esc(a.ip || "—")}</td>
           <td>${a.voidedAt ? `<span class="badge muted">Voided</span><span class="hint">${fmtDateTime(a.voidedAt)} by ${esc(a.voidedBy)}: ${esc(a.voidReason)}</span>`
             : `<details><summary>Void</summary><form data-form="void" data-id="${a.id}">
                 <label for="reason-${a.id}">Reason <span class="hint">Kept in the record. ${esc(a.name)} will be able to sign again.</span></label>
@@ -648,7 +665,7 @@ details[open] summary { margin-bottom: 4px; }
         <tbody>${list.map((u) => {
           const docs = data.docs.filter((d) => isExpected(d, u.id)).length;
           return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span>${u.employeeId ? `<span class="hint">ID ${esc(u.employeeId)}</span>` : ""}<span class="hint">${docs} ${docs === 1 ? "document" : "documents"}</span></td>
-            <td>${u.department ? esc(u.department) : `<span class="hint">No department</span>`}</td>
+            <td>${u.department ? esc(u.department) : `<span class="hint">No department</span>`}${(u.manages || []).length ? `<span class="hint">Manages ${esc(u.manages.join(", "))}</span>` : ""}</td>
             <td>${u.hasPassword ? `<span class="badge ok">Active</span>` : `<span class="badge muted">No password set</span>`}<div style="margin-top:6px">${linkCell(u)}</div></td>
             <td>${u.role === "admin" ? "Admin" : "Reader"}${u.id !== admin.id ? `<br><button type="button" class="link-button" data-action="toggle-role" data-id="${u.id}">${u.role === "admin" ? "Remove admin" : "Make admin"}</button>` : ""}</td>
             <td><details><summary>Edit</summary><form data-form="person" data-id="${u.id}">
@@ -656,6 +673,7 @@ details[open] summary { margin-bottom: 4px; }
               <label for="pe-${u.id}">Email</label><input id="pe-${u.id}" name="email" type="email" required value="${esc(u.email)}">
               <label for="pi-${u.id}">Employee ID <span class="hint">Optional. Never shown to other readers.</span></label><input id="pi-${u.id}" name="employeeId" type="text" value="${esc(u.employeeId)}">
               <label for="po-${u.id}">Department</label><select id="po-${u.id}" name="department">${departmentOptions(u.department, "No department")}</select>
+              <p class="group-label">Manages <span class="hint">Managers see who in these departments still needs to sign.</span></p>${ticks(DEPARTMENTS, "manages", "mg-" + u.id, u.manages || [])}
               ${flash && flash.form === "person-" + u.id ? `<p class="notice ${flash.ok ? "ok" : "bad"}">${esc(flash.text)}</p>` : ""}
               <div class="actions"><button type="submit">Save</button></div></form></details></td></tr>`;
         }).join("")}</tbody></table></div>`}
@@ -686,19 +704,94 @@ details[open] summary { margin-bottom: 4px; }
     return `<div class="card narrow"><h1>Page not found</h1><p>Check the link you were sent.</p><p><button type="button" class="link-button" data-go="home">Go to the home page</button></p></div>`;
   }
 
+  // ---------- signature pad ----------
+  const pad = { mode: "drawn", data: "", typed: "" };
+  const TYPED_FONT = 'italic 40px "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive';
+  function setupPad() {
+    const c = document.getElementById("sig-pad");
+    if (!c) return;
+    pad.mode = "drawn"; pad.data = ""; pad.typed = "";
+    const ctx = c.getContext("2d");
+    const reset = () => {
+      const r = Math.max(window.devicePixelRatio || 1, 1), w = c.clientWidth;
+      c.width = Math.round(w * r); c.height = Math.round(180 * r);
+      ctx.setTransform(r, 0, 0, r, 0, 0);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, 180);
+      ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111827"; ctx.fillStyle = "#111827";
+    };
+    const refresh = () => {
+      document.getElementById("confirm-btn").disabled = !pad.data || (pad.mode === "typed" && !pad.typed.trim());
+      document.getElementById("sig-clear").disabled = pad.mode !== "drawn" || !pad.data;
+    };
+    reset();
+    let last = null;
+    const pt = (e) => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+    c.addEventListener("pointerdown", (e) => { if (pad.mode !== "drawn") return; c.setPointerCapture(e.pointerId); last = pt(e); ctx.beginPath(); ctx.arc(last.x, last.y, 1.2, 0, Math.PI * 2); ctx.fill(); });
+    c.addEventListener("pointermove", (e) => { if (!last) return; const n = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(n.x, n.y); ctx.stroke(); last = n; });
+    const end = () => { if (!last) return; last = null; pad.data = c.toDataURL("image/png"); refresh(); };
+    c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end);
+    document.getElementById("sig-clear").addEventListener("click", () => { reset(); pad.data = ""; refresh(); });
+    const typed = document.getElementById("typed-name");
+    typed.addEventListener("input", () => {
+      pad.typed = typed.value; reset();
+      if (typed.value.trim()) { ctx.font = TYPED_FONT; ctx.textBaseline = "middle"; ctx.fillText(typed.value.trim(), 16, 90, c.clientWidth - 32); pad.data = c.toDataURL("image/png"); }
+      else pad.data = "";
+      refresh();
+    });
+    document.getElementById("sig-mode").addEventListener("click", () => {
+      pad.mode = pad.mode === "drawn" ? "typed" : "drawn"; pad.data = ""; pad.typed = ""; typed.value = ""; reset();
+      document.getElementById("typed-wrap").hidden = pad.mode !== "typed";
+      document.getElementById("sig-label").textContent = pad.mode === "drawn" ? "Sign in the box" : "Your signature";
+      document.getElementById("sig-mode").textContent = pad.mode === "drawn" ? "Can't draw? Type your name instead" : "Draw my signature instead";
+      document.getElementById("sig-help").textContent = pad.mode === "drawn" ? "Use your finger, a stylus or your mouse." : "Typing your name counts as your signature, and the record shows it was typed.";
+      c.classList.toggle("typed", pad.mode === "typed");
+      if (pad.mode === "typed") typed.focus();
+      refresh();
+    });
+  }
+
+  // ---------- my team (department managers) ----------
+  function viewTeam() {
+    const u = me(), managed = u.manages || [];
+    if (!managed.length) return viewMy();
+    const sel = managed.includes(ui.teamDept) ? ui.teamDept : "";
+    const depts = sel ? [sel] : managed;
+    const docs = data.docs.filter((d) => d.status === "open").map((d) => ({ d, people: expectedIds(d).map(userById).filter((p) => p && depts.includes(p.department)) }))
+      .filter((g) => g.people.length).sort((a, b) => String(a.d.due || "9").localeCompare(String(b.d.due || "9")));
+    const outstanding = docs.reduce((n, g) => n + g.people.filter((p) => !liveAck(g.d.id, p.id)).length, 0);
+    const scope = depts.join(", ");
+    const tabs = managed.length > 1 ? `<nav class="tabs" aria-label="Filter by department">${["", ...managed].map((t) => `<button type="button" class="tab${t === sel ? " current" : ""}" data-action="team-tab" data-dept="${esc(t)}">${t ? esc(t) : "All my departments"}</button>`).join("")}</nav>` : "";
+    return `<div class="fade"><h1>My team</h1>
+      <p class="lead">${docs.length === 0 ? `No open documents for ${esc(scope)}.` : outstanding === 0 ? `Everyone in ${esc(scope)} is up to date.` : `${outstanding} ${outstanding === 1 ? "signature is" : "signatures are"} still needed in ${esc(scope)}.`}</p>
+      ${tabs}
+      ${docs.map(({ d, people }) => {
+        const signed = people.filter((p) => liveAck(d.id, p.id)).length, late = isOverdue(d.due);
+        return `<section class="card"><h2>${esc(d.name)}</h2>
+          <p class="hint" style="margin-top:-8px">${esc([d.category, d.version && "Version " + d.version, d.due && "Due " + fmtDate(d.due)].filter(Boolean).join(" · "))}</p>
+          <p><strong>${signed} of ${people.length} signed</strong>${signed < people.length && late ? ` <span class="badge bad">Overdue</span>` : ""}</p>
+          <div class="table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Department</th><th scope="col">Status</th></tr></thead><tbody>
+          ${people.sort((a, b) => !!liveAck(d.id, a.id) - !!liveAck(d.id, b.id) || a.name.localeCompare(b.name)).map((p) => { const a = liveAck(d.id, p.id); return `<tr><td>${esc(p.name)}<span class="hint">${esc(p.email)}</span></td><td>${esc(p.department)}</td><td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : late ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Needs to sign</span>`}</td></tr>`; }).join("")}
+          </tbody></table></div>
+          ${signed < people.length ? `<details style="margin-top:12px"><summary>Sign link to send to your team</summary><div class="copy-row" style="margin-top:8px"><input type="text" readonly id="tl-${d.id}" value="${BASE}/sign/${d.token}" aria-label="Sign link for ${esc(d.name)}"><button type="button" class="secondary" data-action="copy" data-target="tl-${d.id}">Copy</button></div></details>` : ""}
+        </section>`;
+      }).join("")}</div>`;
+  }
+
   // ---------- render ----------
   function render() {
     const u = me();
     if (!u && ui.view !== "login" && ui.view !== "account") ui.view = "login";
     if (u && u.role !== "admin" && ["admin", "doc", "new", "people"].includes(ui.view)) ui.view = "my";
-    const views = { login: viewLogin, my: viewMy, sign: viewSign, admin: viewAdmin, doc: viewDoc, new: viewNew, people: viewPeople, account: viewAccount };
+    if (u && ui.view === "team" && !(u.manages || []).length) ui.view = "my";
+    const views = { login: viewLogin, my: viewMy, sign: viewSign, admin: viewAdmin, doc: viewDoc, new: viewNew, people: viewPeople, account: viewAccount, team: viewTeam };
     document.getElementById("header").innerHTML = header();
     document.getElementById("main").innerHTML = (views[ui.view] || viewNotFound)();
+    setupPad();
     const sel = document.getElementById("demo-as");
     sel.innerHTML = `<option value="">Signed out</option>` + data.users.filter((x) => x.hasPassword)
       .map((x) => `<option value="${x.id}"${x.id === ui.userId ? " selected" : ""}>${esc(x.name)} (${x.role === "admin" ? "admin" : "reader"})</option>`).join("");
     if (!u) sel.value = "";
-    const t = { login: "Sign in", my: "My documents", sign: "Acknowledge a document", admin: "Documents", doc: "Document", new: "New document", people: "People", account: "Set your password" }[ui.view];
+    const t = { login: "Sign in", my: "My documents", sign: "Acknowledge a document", admin: "Documents", doc: "Document", new: "New document", people: "People", account: "Set your password", team: "My team" }[ui.view];
     document.title = (t ? t + " · " : "") + "Read and Acknowledge Demo";
     flash = null;
   }
@@ -733,6 +826,7 @@ details[open] summary { margin-bottom: 4px; }
         const d = docById(ui.docId); d.signers = d.signers.filter((s) => s !== id);
         save(); render(); return toast(`Removed ${userById(id).name} from this document.`);
       }
+      case "team-tab": ui.teamDept = el.getAttribute("data-dept"); save(); return render();
       case "category-tab": ui.category = el.getAttribute("data-cat"); save(); return render();
       case "add-me": {
         const d = docById(id), u = me();
@@ -767,7 +861,6 @@ details[open] summary { margin-bottom: 4px; }
   });
 
   document.addEventListener("change", (e) => {
-    if (e.target.id === "agree") document.getElementById("confirm-btn").disabled = !e.target.checked;
     if (e.target.id === "demo-as") {
       const v = e.target.value;
       if (!v) { ui.userId = null; return go("login"); }
@@ -797,10 +890,10 @@ details[open] summary { margin-bottom: 4px; }
       return signInAs(u.id);
     }
     if (kind === "sign") {
-      if (!f.get("agree")) return;
+      if (!pad.data) return;
       const u = me(), d = data.docs.find((x) => x.token === ui.token);
       if (!liveAck(d.id, u.id)) {
-        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, department: u.department || "", docName: d.name, category: d.category || "", version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
+        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, department: u.department || "", sigMethod: pad.mode, sigName: pad.mode === "typed" ? pad.typed.trim() : "", sigImage: pad.data, docName: d.name, category: d.category || "", version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
       }
       return go("sign", { justSigned: true });
     }
@@ -860,7 +953,7 @@ details[open] summary { margin-bottom: 4px; }
       if (!val("name")) { flash = { form: "person-" + u.id, text: "Enter a name." }; return render(); }
       if (!EMAIL_RE.test(email)) { flash = { form: "person-" + u.id, text: "Enter a valid email address." }; return render(); }
       if (data.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email)) { flash = { form: "person-" + u.id, text: "Someone else already uses that email address." }; return render(); }
-      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId"), department: val("department") });
+      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId"), department: val("department"), manages: f.getAll("manages").map(String) });
       save(); render(); return toast("Saved.");
     }
     if (kind === "account") {
