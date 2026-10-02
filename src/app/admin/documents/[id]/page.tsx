@@ -4,12 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { query, queryOne } from "@/lib/db";
 import { formatDate, formatDateTime, isOverdue } from "@/lib/format";
-import { listOutstations } from "@/lib/outstations";
+import { listDistributionLists, listOutstations } from "@/lib/outstations";
 import { appBaseUrl } from "@/lib/request";
 import { requireAdmin } from "@/lib/session";
 import { isUuid } from "@/lib/validation";
 import { addMeAsSigner, removeSigner, setDocumentStatus } from "../../actions";
-import { AddPeopleForm, CopyField, DocumentForm, OutstationsForm, PersonLinkButton, VoidForm } from "../../components";
+import { AddPeopleForm, CopyField, DocumentForm, GroupsForm, PersonLinkButton, VoidForm } from "../../components";
 
 export const metadata: Metadata = { title: "Document" };
 
@@ -34,6 +34,8 @@ type Signer = {
   outstation: string | null;
   individual: boolean;
   via_outstation: boolean;
+  lists: string[];
+  via_lists: string[];
 };
 
 type Ack = {
@@ -41,6 +43,7 @@ type Ack = {
   signer_name: string;
   signer_email: string;
   signer_outstation: string | null;
+  signer_distribution_lists: string | null;
   version_label: string | null;
   acknowledged_at: Date;
   ip_address: string | null;
@@ -61,12 +64,18 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
   );
   if (!doc) notFound();
 
-  const [signers, acks, outstations, selectedRows] = await Promise.all([
+  const [signers, acks, outstations, selectedRows, lists, selectedListRows] = await Promise.all([
     query<Signer>(
       `SELECT u.id, u.name, u.email, u.password_hash IS NOT NULL AS has_password, a.acknowledged_at,
               o.name AS outstation, ds.individual,
               EXISTS (SELECT 1 FROM document_outstations dos
-                       WHERE dos.document_id = ds.document_id AND dos.outstation_id = u.outstation_id) AS via_outstation
+                       WHERE dos.document_id = ds.document_id AND dos.outstation_id = u.outstation_id) AS via_outstation,
+              ARRAY(SELECT dl.name FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
+                     WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS lists,
+              ARRAY(SELECT dl.name FROM user_distribution_lists udl
+                      JOIN distribution_lists dl ON dl.id = udl.list_id
+                      JOIN document_distribution_lists ddl ON ddl.list_id = udl.list_id AND ddl.document_id = ds.document_id
+                     WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS via_lists
          FROM document_signers ds
          JOIN users u ON u.id = ds.user_id
          LEFT JOIN outstations o ON o.id = u.outstation_id
@@ -77,7 +86,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
       [id],
     ),
     query<Ack>(
-      `SELECT a.id, a.signer_name, a.signer_email, a.signer_outstation, a.version_label, a.acknowledged_at, a.ip_address,
+      `SELECT a.id, a.signer_name, a.signer_email, a.signer_outstation, a.signer_distribution_lists, a.version_label, a.acknowledged_at, a.ip_address,
               a.voided_at, a.void_reason, v.name AS voided_by_name
          FROM acknowledgements a LEFT JOIN users v ON v.id = a.voided_by
         WHERE a.document_id = $1
@@ -86,8 +95,19 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
     ),
     listOutstations(),
     query<{ outstation_id: number }>("SELECT outstation_id FROM document_outstations WHERE document_id = $1", [id]),
+    listDistributionLists(),
+    query<{ list_id: number }>("SELECT list_id FROM document_distribution_lists WHERE document_id = $1", [id]),
   ]);
   const selected = selectedRows.map((r) => r.outstation_id);
+  const selectedLists = selectedListRows.map((r) => r.list_id);
+
+  // Signed and outstanding per distribution list, for the people currently expected.
+  const listSummary = lists
+    .map((l) => {
+      const members = signers.filter((s) => s.lists.includes(l.name));
+      return { name: l.name, total: members.length, signed: members.filter((s) => s.acknowledged_at).length };
+    })
+    .filter((row) => row.total > 0);
 
   // Signed and outstanding per outstation, for the people currently expected.
   const byOutstation = new Map<string, { signed: number; total: number }>();
@@ -181,9 +201,15 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
 
       <section className="card" aria-labelledby="outstations-heading">
         <h2 id="outstations-heading" style={{ marginTop: 0 }}>
-          Outstations that need to acknowledge this
+          Who needs to acknowledge this
         </h2>
-        <OutstationsForm documentId={doc.id} outstations={outstations} selected={selected} />
+        <GroupsForm
+          documentId={doc.id}
+          outstations={outstations}
+          lists={lists}
+          selectedOutstations={selected}
+          selectedLists={selectedLists}
+        />
       </section>
 
       {summary.length > 0 && (
@@ -214,16 +240,45 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
         </>
       )}
 
+      {listSummary.length > 0 && (
+        <>
+          <h2>Progress by distribution list</h2>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Distribution list</th>
+                  <th scope="col">Signed</th>
+                  <th scope="col">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listSummary.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>
+                      {row.signed} of {row.total}
+                    </td>
+                    <td>{row.total - row.signed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint">People on more than one list are counted in each.</p>
+        </>
+      )}
+
       <h2>People expected to sign ({signers.length})</h2>
       {signers.length === 0 ? (
-        <p>No one yet. Tick the outstations above, or add people below.</p>
+        <p>No one yet. Tick outstations or distribution lists above, or add people below.</p>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Outstation</th>
+                <th scope="col">Outstation and lists</th>
                 <th scope="col">Status</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
@@ -238,8 +293,9 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                     <span className="hint">{s.email}</span>
                   </td>
                   <td>
-                    {s.outstation ?? <span className="hint">Not set</span>}
-                    {!s.via_outstation && <span className="hint">Added by name</span>}
+                    {s.outstation ?? <span className="hint">No outstation</span>}
+                    {!s.via_outstation && s.via_lists.length === 0 && <span className="hint">Added by name</span>}
+                    {s.lists.length > 0 && <span className="hint">{s.lists.join(", ")}</span>}
                   </td>
                   <td>
                     {s.acknowledged_at ? (
@@ -257,8 +313,10 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                     )}
                   </td>
                   <td>
-                    {s.via_outstation ? (
-                      <span className="hint">Via {s.outstation}</span>
+                    {s.via_outstation || s.via_lists.length > 0 ? (
+                      <span className="hint">
+                        Via {[...(s.via_outstation ? [s.outstation] : []), ...s.via_lists].join(", ")}
+                      </span>
                     ) : (
                       <form action={removeSigner}>
                         <input type="hidden" name="document_id" value={doc.id} />
@@ -280,8 +338,8 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
         <h2 id="add-heading" style={{ marginTop: 0 }}>
           Add individual people
         </h2>
-        <p className="hint">For people outside the ticked outstations, or anyone without an outstation.</p>
-        <AddPeopleForm documentId={doc.id} outstations={outstations} />
+        <p className="hint">For people outside the ticked outstations and lists.</p>
+        <AddPeopleForm documentId={doc.id} outstations={outstations} lists={lists} />
       </section>
 
       <h2>Acknowledgement records ({acks.length})</h2>
@@ -306,6 +364,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                     {a.signer_name}
                     <span className="hint">{a.signer_email}</span>
                     {a.signer_outstation && <span className="hint">{a.signer_outstation}</span>}
+                    {a.signer_distribution_lists && <span className="hint">{a.signer_distribution_lists}</span>}
                   </td>
                   <td>{formatDateTime(a.acknowledged_at)}</td>
                   <td>{a.version_label ?? "—"}</td>

@@ -127,6 +127,30 @@ describe.skipIf(!url)("acknowledgements table", () => {
     expect(await expected()).toEqual([]);
   });
 
+  it("expects everyone on a document's distribution lists, alongside its outstations", async () => {
+    const { rows: lists } = await client.query("SELECT id, name FROM distribution_lists ORDER BY sort_order");
+    expect(lists.map((r) => r.name)).toEqual(["Engineering", "Purchasing", "Health and Safety", "Operations Managers"]);
+    const engineering = lists[0].id;
+    const expected = async () =>
+      (await client.query("SELECT user_id FROM document_signers WHERE document_id = $1", [docId])).rows.map((r) => r.user_id);
+
+    await client.query("INSERT INTO document_distribution_lists (document_id, list_id) VALUES ($1, $2)", [docId, engineering]);
+    expect(await expected()).toEqual([]);
+    await client.query("INSERT INTO user_distribution_lists (user_id, list_id) VALUES ($1, $2)", [userId, engineering]);
+    expect(await expected()).toEqual([userId]);
+
+    // On a ticked list and at a ticked outstation: still listed once.
+    const { rows: os } = await client.query("SELECT id FROM outstations WHERE name = 'Humber'");
+    await client.query("UPDATE users SET outstation_id = $2 WHERE id = $1", [userId, os[0].id]);
+    await client.query("INSERT INTO document_outstations (document_id, outstation_id) VALUES ($1, $2)", [docId, os[0].id]);
+    expect(await expected()).toEqual([userId]);
+  });
+
+  it("protects the signer's distribution lists on a record", async () => {
+    const id = await sign();
+    await expectError("UPDATE acknowledgements SET signer_distribution_lists = 'Purchasing' WHERE id = $1", [id], /voided/);
+  });
+
   it("only accepts web links for document locations", async () => {
     await expectError("UPDATE documents SET location_url = 'javascript:alert(1)' WHERE id = $1", [docId], /check/);
   });

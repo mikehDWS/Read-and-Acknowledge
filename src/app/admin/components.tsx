@@ -20,16 +20,70 @@ import {
 
 type Outstation = { id: number; name: string };
 
-function OutstationChecks({ outstations, selected }: { outstations: Outstation[]; selected: number[] }) {
+type Group = { id: number; name: string };
+
+/** A grid of tick boxes (or one-choice tick list when `single`) for outstations or distribution lists. */
+function GroupChecks({
+  name,
+  idPrefix,
+  items,
+  selected,
+  single = false,
+  noneLabel,
+}: {
+  name: string;
+  idPrefix: string;
+  items: Group[];
+  selected: number[];
+  single?: boolean;
+  noneLabel?: string;
+}) {
   return (
     <div className="check-grid">
-      {outstations.map((o) => (
-        <label key={o.id} className="check-item" htmlFor={`os-${o.id}`}>
-          <input id={`os-${o.id}`} type="checkbox" name="outstation_ids" value={o.id} defaultChecked={selected.includes(o.id)} />
+      {items.map((o) => (
+        <label key={o.id} className="check-item" htmlFor={`${idPrefix}-${o.id}`}>
+          <input
+            id={`${idPrefix}-${o.id}`}
+            type={single ? "radio" : "checkbox"}
+            name={name}
+            value={o.id}
+            defaultChecked={selected.includes(o.id)}
+          />
           {o.name}
         </label>
       ))}
+      {single && noneLabel && (
+        <label className="check-item" htmlFor={`${idPrefix}-none`}>
+          <input id={`${idPrefix}-none`} type="radio" name={name} value="" defaultChecked={selected.length === 0} />
+          {noneLabel}
+        </label>
+      )}
     </div>
+  );
+}
+
+function GroupPickers({
+  outstations,
+  lists,
+  selectedOutstations,
+  selectedLists,
+}: {
+  outstations: Group[];
+  lists: Group[];
+  selectedOutstations: number[];
+  selectedLists: number[];
+}) {
+  return (
+    <>
+      <p className="group-label">Outstations</p>
+      <GroupChecks name="outstation_ids" idPrefix="os" items={outstations} selected={selectedOutstations} />
+      {lists.length > 0 && (
+        <>
+          <p className="group-label">Distribution lists</p>
+          <GroupChecks name="distribution_ids" idPrefix="dl" items={lists} selected={selectedLists} />
+        </>
+      )}
+    </>
   );
 }
 
@@ -56,21 +110,30 @@ function OutstationSelect({
   );
 }
 
-/** Which outstations need to acknowledge a document. */
-export function OutstationsForm({
+/** Which outstations and distribution lists need to acknowledge a document. */
+export function GroupsForm({
   documentId,
   outstations,
-  selected,
+  lists,
+  selectedOutstations,
+  selectedLists,
 }: {
   documentId: string;
-  outstations: Outstation[];
-  selected: number[];
+  outstations: Group[];
+  lists: Group[];
+  selectedOutstations: number[];
+  selectedLists: number[];
 }) {
   const [state, action, pending] = useActionState<OutstationsFormState, FormData>(setDocumentOutstations, {});
   return (
     <form action={action}>
       <input type="hidden" name="document_id" value={documentId} />
-      <OutstationChecks outstations={outstations} selected={selected} />
+      <GroupPickers
+        outstations={outstations}
+        lists={lists}
+        selectedOutstations={selectedOutstations}
+        selectedLists={selectedLists}
+      />
       {state.error && (
         <p className="notice bad" role="alert">
           {state.error}
@@ -78,14 +141,16 @@ export function OutstationsForm({
       )}
       {state.saved && (
         <p className="notice ok" role="status">
-          Outstations saved.
+          Saved.
         </p>
       )}
       <div className="actions">
         <button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save outstations"}
+          {pending ? "Saving…" : "Save"}
         </button>
-        <span className="hint">Everyone at a ticked outstation needs to sign, including people who join it later.</span>
+        <span className="hint">
+          Everyone at a ticked outstation or on a ticked list needs to sign, including people who join later.
+        </span>
       </div>
     </form>
   );
@@ -126,7 +191,15 @@ type DocumentValues = {
   location_url: string | null;
 };
 
-export function DocumentForm({ doc, outstations }: { doc?: DocumentValues; outstations?: Outstation[] }) {
+export function DocumentForm({
+  doc,
+  outstations,
+  lists = [],
+}: {
+  doc?: DocumentValues;
+  outstations?: Outstation[];
+  lists?: Group[];
+}) {
   const [state, action, pending] = useActionState<DocumentFormState, FormData>(
     doc?.id ? updateDocument : createDocument,
     {},
@@ -178,10 +251,13 @@ export function DocumentForm({ doc, outstations }: { doc?: DocumentValues; outst
       {!doc?.id && outstations && outstations.length > 0 && (
         <fieldset className="fieldset">
           <legend>
-            Outstations that need to acknowledge this{" "}
-            <span className="hint">Everyone at these outstations will need to sign. You can also add individual people next.</span>
+            Who needs to acknowledge this{" "}
+            <span className="hint">
+              Everyone at a ticked outstation or on a ticked list will need to sign. You can also add individual
+              people next.
+            </span>
           </legend>
-          <OutstationChecks outstations={outstations} selected={[]} />
+          <GroupPickers outstations={outstations} lists={lists} selectedOutstations={[]} selectedLists={[]} />
         </fieldset>
       )}
       <div className="actions">
@@ -193,7 +269,15 @@ export function DocumentForm({ doc, outstations }: { doc?: DocumentValues; outst
   );
 }
 
-export function AddPeopleForm({ documentId, outstations = [] }: { documentId?: string; outstations?: Outstation[] }) {
+export function AddPeopleForm({
+  documentId,
+  outstations = [],
+  lists = [],
+}: {
+  documentId?: string;
+  outstations?: Outstation[];
+  lists?: Group[];
+}) {
   const [state, action, pending] = useActionState<AddPeopleState, FormData>(
     documentId ? addSigners : addPeople,
     {},
@@ -209,19 +293,36 @@ export function AddPeopleForm({ documentId, outstations = [] }: { documentId?: s
       <label htmlFor="people">
         People
         <span className="hint">
-          One per line: <code>Name, email</code>, optionally with an outstation:{" "}
-          <code>Name, email, Ferrybridge</code>. You can paste columns straight from a spreadsheet. New email
-          addresses get a reader account.
+          One per line: <code>Name, email</code>, optionally with an outstation and distribution lists:{" "}
+          <code>Name, email, Ferrybridge, Engineering</code>. You can paste columns straight from a spreadsheet.
+          New email addresses get a reader account.
         </span>
       </label>
       <textarea id="people" name="people" placeholder={"Sam Patel, sam.patel@example.com\nAlex Jones, alex.jones@example.com, Humber"} />
       {outstations.length > 0 && (
         <>
-          <label htmlFor="people-outstation">
+          <p className="group-label">
             Outstation{" "}
-            <span className="hint">For anyone without an outstation yet. An outstation on a line takes priority.</span>
-          </label>
-          <OutstationSelect id="people-outstation" outstations={outstations} emptyLabel="Don't set an outstation" />
+            <span className="hint">
+              Pick one. It applies to anyone without an outstation yet; an outstation on a line takes priority.
+            </span>
+          </p>
+          <GroupChecks
+            name="outstation_id"
+            idPrefix={documentId ? "add-os" : "people-os"}
+            items={outstations}
+            selected={[]}
+            single
+            noneLabel="Don't set"
+          />
+        </>
+      )}
+      {lists.length > 0 && (
+        <>
+          <p className="group-label">
+            Distribution lists <span className="hint">Tick any that apply. People keep lists they&apos;re already on.</span>
+          </p>
+          <GroupChecks name="distribution_ids" idPrefix={documentId ? "add-dl" : "people-dl"} items={lists} selected={[]} />
         </>
       )}
       {state.error && (
@@ -287,9 +388,18 @@ type PersonValues = {
   email: string;
   employee_id: string | null;
   outstation_id: number | null;
+  distribution_ids: number[];
 };
 
-export function PersonEditForm({ person, outstations }: { person: PersonValues; outstations: Outstation[] }) {
+export function PersonEditForm({
+  person,
+  outstations,
+  lists,
+}: {
+  person: PersonValues;
+  outstations: Outstation[];
+  lists: Group[];
+}) {
   const [state, action, pending] = useActionState<PersonFormState, FormData>(updatePerson, {});
   return (
     <details>
@@ -311,6 +421,12 @@ export function PersonEditForm({ person, outstations }: { person: PersonValues; 
           defaultValue={person.outstation_id}
           emptyLabel="No outstation"
         />
+        {lists.length > 0 && (
+          <>
+            <p className="group-label">Distribution lists</p>
+            <GroupChecks name="distribution_ids" idPrefix={`pdl-${person.id}`} items={lists} selected={person.distribution_ids} />
+          </>
+        )}
         {state.error && (
           <p className="notice bad" role="alert">
             {state.error}

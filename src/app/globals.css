@@ -145,3 +145,5 @@ td form { display: inline; margin: 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
 .filters input[type="search"] { flex: 1 1 220px; width: auto; }
 .filters select { width: auto; }
+.group-label { font-weight: 600; margin: 16px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }

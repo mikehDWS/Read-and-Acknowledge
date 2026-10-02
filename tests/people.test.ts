@@ -57,3 +57,17 @@ describe("parsePeopleList with outstations", () => {
     expect(people).toEqual([{ name: "Sam Patel", email: "sam@example.com" }]);
   });
 });
+
+describe("parsePeopleList with distribution lists", () => {
+  it("collects any distribution list columns alongside the outstation", () => {
+    const { people } = parsePeopleList(
+      "Sam Patel, sam@example.com, Ferrybridge, Engineering, health and safety\nAlex\talex@example.com\tPurchasing",
+      ["Ferrybridge", "Humber"],
+      ["Engineering", "Purchasing", "Health and Safety", "Operations Managers"],
+    );
+    expect(people).toEqual([
+      { name: "Sam Patel", email: "sam@example.com", outstation: "Ferrybridge", distributionLists: ["Engineering", "Health and Safety"] },
+      { name: "Alex", email: "alex@example.com", distributionLists: ["Purchasing"] },
+    ]);
+  });
+});

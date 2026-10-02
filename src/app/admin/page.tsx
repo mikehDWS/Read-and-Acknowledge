@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { query } from "@/lib/db";
 import { formatDate, isOverdue } from "@/lib/format";
-import { listOutstations } from "@/lib/outstations";
+import { listDistributionLists, listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Documents" };
@@ -16,11 +16,12 @@ type Row = {
   expected: number;
   signed: number;
   outstations: string[];
+  lists: string[];
 };
 
 export default async function AdminDashboard() {
   await requireAdmin("/admin");
-  const outstations = await listOutstations();
+  const [outstations, lists] = await Promise.all([listOutstations(), listDistributionLists()]);
   const docs = await query<Row>(
     `SELECT d.id, d.name, d.version_label, d.due_date, d.status,
             (SELECT count(*) FROM document_signers es WHERE es.document_id = d.id)::int AS expected,
@@ -29,7 +30,9 @@ export default async function AdminDashboard() {
                  ON a.document_id = es.document_id AND a.user_id = es.user_id AND a.voided_at IS NULL
               WHERE es.document_id = d.id)::int AS signed,
             ARRAY(SELECT o.name FROM document_outstations dos JOIN outstations o ON o.id = dos.outstation_id
-                   WHERE dos.document_id = d.id ORDER BY o.sort_order, o.name) AS outstations
+                   WHERE dos.document_id = d.id ORDER BY o.sort_order, o.name) AS outstations,
+            ARRAY(SELECT dl.name FROM document_distribution_lists ddl JOIN distribution_lists dl ON dl.id = ddl.list_id
+                   WHERE ddl.document_id = d.id ORDER BY dl.sort_order, dl.name) AS lists
        FROM documents d
       ORDER BY d.status = 'closed', d.due_date NULLS LAST, d.created_at DESC`,
   );
@@ -53,7 +56,7 @@ export default async function AdminDashboard() {
             <thead>
               <tr>
                 <th scope="col">Document</th>
-                <th scope="col">Outstations</th>
+                <th scope="col">Sent to</th>
                 <th scope="col">Due</th>
                 <th scope="col">Signed</th>
                 <th scope="col">Outstanding</th>
@@ -70,12 +73,15 @@ export default async function AdminDashboard() {
                       {d.version_label && <span className="hint">Version {d.version_label}</span>}
                     </td>
                     <td>
-                      {d.outstations.length === 0 ? (
+                      {d.outstations.length === 0 && d.lists.length === 0 ? (
                         <span className="hint">Named people only</span>
-                      ) : d.outstations.length === outstations.length ? (
-                        "All outstations"
                       ) : (
-                        d.outstations.join(", ")
+                        <>
+                          {d.outstations.length === outstations.length && outstations.length > 0
+                            ? "All outstations"
+                            : d.outstations.join(", ")}
+                          {d.lists.length > 0 && <span className="hint">{d.lists.join(", ")}</span>}
+                        </>
                       )}
                     </td>
                     <td>
@@ -129,6 +135,18 @@ export default async function AdminDashboard() {
             </select>
           </div>
           <div>
+            <label htmlFor="export-list">Distribution list</label>
+            <select id="export-list" name="list" defaultValue="">
+              <option value="">All distribution lists</option>
+              {lists.map((l) => (
+                <option key={l.id} value={l.name}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div />
+          <div>
             <label htmlFor="from">Signed from</label>
             <input id="from" name="from" type="date" />
           </div>
@@ -140,7 +158,7 @@ export default async function AdminDashboard() {
         <div className="actions">
           <button type="submit">Download CSV</button>
           <span className="hint">
-            Includes voided records, marked as voided. The outstation is the one each person was at when they signed.
+            Includes voided records, marked as voided. The outstation and lists are the ones each person had when they signed.
           </span>
         </div>
       </form>

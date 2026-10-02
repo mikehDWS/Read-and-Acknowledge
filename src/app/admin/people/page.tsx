@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { query } from "@/lib/db";
-import { listOutstations } from "@/lib/outstations";
+import { listDistributionLists, listOutstations } from "@/lib/outstations";
 import { requireAdmin } from "@/lib/session";
 import { setRole } from "../actions";
 import { AddPeopleForm, PersonEditForm, PersonLinkButton } from "../components";
@@ -14,6 +14,8 @@ type Person = {
   employee_id: string | null;
   outstation_id: number | null;
   outstation: string | null;
+  distribution_ids: number[];
+  distribution_lists: string[];
   role: "reader" | "admin";
   has_password: boolean;
   locked: boolean;
@@ -23,17 +25,22 @@ type Person = {
 export default async function PeoplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; outstation?: string }>;
+  searchParams: Promise<{ q?: string; outstation?: string; list?: string }>;
 }) {
   const admin = await requireAdmin("/admin/people");
-  const { q, outstation } = await searchParams;
+  const { q, outstation, list } = await searchParams;
   const search = q?.trim().slice(0, 200) ?? "";
-  const outstations = await listOutstations();
+  const [outstations, lists] = await Promise.all([listOutstations(), listDistributionLists()]);
+  const listFilter = lists.find((l) => String(l.id) === list)?.id ?? null;
   // "none" lists people without an outstation; a number lists one outstation.
   const outstationFilter =
     outstation === "none" ? "none" : outstations.find((o) => String(o.id) === outstation)?.id ?? null;
   const people = await query<Person>(
     `SELECT u.id, u.name, u.email, u.employee_id, u.outstation_id, o.name AS outstation, u.role,
+            ARRAY(SELECT udl.list_id FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
+                   WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS distribution_ids,
+            ARRAY(SELECT dl.name FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
+                   WHERE udl.user_id = u.id ORDER BY dl.sort_order) AS distribution_lists,
             u.password_hash IS NOT NULL AS has_password,
             coalesce(u.locked_until > now(), false) AS locked,
             (SELECT count(*) FROM document_signers es WHERE es.user_id = u.id)::int AS documents
@@ -43,9 +50,11 @@ export default async function PeoplePage({
         AND ($2::text IS NULL
              OR ($2 = 'none' AND u.outstation_id IS NULL)
              OR u.outstation_id::text = $2)
+        AND ($3::int IS NULL
+             OR EXISTS (SELECT 1 FROM user_distribution_lists udl WHERE udl.user_id = u.id AND udl.list_id = $3))
       ORDER BY lower(u.name)
       LIMIT 500`,
-    [search.replace(/[\\%_]/g, (c) => `\\${c}`), outstationFilter === null ? null : String(outstationFilter)],
+    [search.replace(/[\\%_]/g, (c) => `\\${c}`), outstationFilter === null ? null : String(outstationFilter), listFilter],
   );
 
   return (
@@ -73,6 +82,17 @@ export default async function PeoplePage({
           ))}
           <option value="none">No outstation</option>
         </select>
+        <label htmlFor="list-filter" className="visually-hidden">
+          Distribution list
+        </label>
+        <select id="list-filter" name="list" defaultValue={listFilter === null ? "" : String(listFilter)}>
+          <option value="">All distribution lists</option>
+          {lists.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
         <button type="submit" className="secondary">
           Search
         </button>
@@ -86,7 +106,7 @@ export default async function PeoplePage({
             <thead>
               <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Outstation</th>
+                <th scope="col">Outstation and lists</th>
                 <th scope="col">Account</th>
                 <th scope="col">Role</th>
                 <th scope="col">
@@ -105,7 +125,18 @@ export default async function PeoplePage({
                       {p.documents} {p.documents === 1 ? "document" : "documents"}
                     </span>
                   </td>
-                  <td>{p.outstation ?? <span className="hint">Not set</span>}</td>
+                  <td>
+                    {p.outstation ?? <span className="hint">No outstation</span>}
+                    {p.distribution_lists.length > 0 && (
+                      <span className="chips">
+                        {p.distribution_lists.map((l) => (
+                          <span key={l} className="badge muted">
+                            {l}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {p.has_password ? (
                       <span className="badge ok">Active</span>
@@ -130,7 +161,7 @@ export default async function PeoplePage({
                     )}
                   </td>
                   <td>
-                    <PersonEditForm person={p} outstations={outstations} />
+                    <PersonEditForm person={p} outstations={outstations} lists={lists} />
                   </td>
                 </tr>
               ))}
@@ -143,7 +174,7 @@ export default async function PeoplePage({
         <h2 id="add-people-heading" style={{ marginTop: 0 }}>
           Add people
         </h2>
-        <AddPeopleForm outstations={outstations} />
+        <AddPeopleForm outstations={outstations} lists={lists} />
       </section>
     </>
   );

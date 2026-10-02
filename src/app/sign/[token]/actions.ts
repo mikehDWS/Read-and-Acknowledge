@@ -39,10 +39,13 @@ export async function acknowledge(_prev: AcknowledgeState, form: FormData): Prom
       if (!expected) return "not-listed";
       await db.query(
         `INSERT INTO acknowledgements
-           (document_id, user_id, signer_name, signer_email, signer_outstation, document_name,
-            version_label, statement_text, ip_address, user_agent)
+           (document_id, user_id, signer_name, signer_email, signer_outstation, signer_distribution_lists,
+            document_name, version_label, statement_text, ip_address, user_agent)
          VALUES ($1, $2, $3, $4,
                  (SELECT o.name FROM users u JOIN outstations o ON o.id = u.outstation_id WHERE u.id = $2),
+                 (SELECT string_agg(dl.name, ', ' ORDER BY dl.sort_order)
+                    FROM user_distribution_lists udl JOIN distribution_lists dl ON dl.id = udl.list_id
+                   WHERE udl.user_id = $2),
                  $5, $6, $7, $8, $9)`,
         [
           doc.id,

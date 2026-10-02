@@ -21,3 +21,15 @@ export function outstationIdFrom(
   const id = Number(value);
   return outstations.some((o) => o.id === id) ? id : undefined;
 }
+
+export type DistributionList = { id: number; name: string };
+
+export function listDistributionLists(db?: Queryable): Promise<DistributionList[]> {
+  return query<DistributionList>("SELECT id, name FROM distribution_lists ORDER BY sort_order, name", [], db);
+}
+
+/** The ids ticked in a group of checkboxes, keeping only ones that exist. */
+export function idsFrom(form: FormData, field: string, valid: { id: number }[]): number[] {
+  const known = new Set(valid.map((v) => v.id));
+  return [...new Set(form.getAll(field).map(Number))].filter((id) => known.has(id));
+}
