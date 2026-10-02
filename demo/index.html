@@ -380,6 +380,7 @@ details[open] summary { margin-bottom: 4px; }
     const expected = d.signers.includes(u.id);
     let body;
     if (a) body = `<div class="notice ok" role="status"><strong>${ui.justSigned ? "Thank you. " : ""}You acknowledged this document on ${fmtDateTime(a.at)}.</strong></div>`;
+    else if (!expected && u.role === "admin" && d.status === "open") body = `<p class="notice warn">You're not on this document's list yet. As an admin, you can add yourself.</p><button type="button" data-action="add-me" data-id="${d.id}" data-then="sign">Add me to the list</button>`;
     else if (!expected) body = `<p class="notice warn">You're not on the list for this document. If you think you should be, contact your admin.</p>`;
     else if (d.status === "closed") body = `<p class="notice warn">This document is no longer accepting acknowledgements.</p>`;
     else body = `<form data-form="sign">
@@ -511,6 +512,8 @@ details[open] summary { margin-bottom: 4px; }
         </div>
       </section>
 
+      ${myPanel(d)}
+
       <h2>People expected to sign (${n})</h2>
       ${n === 0 ? `<p>No one yet. Add people below.</p>` : `<div class="table-wrap"><table>
         <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
@@ -541,6 +544,16 @@ details[open] summary { margin-bottom: 4px; }
       <h2>Document details</h2>
       <div class="card">${documentForm(d)}<p class="hint">Past acknowledgements keep the name and version they were signed under.</p></div>
     </div>`;
+  }
+
+  function myPanel(d) {
+    const u = me(), a = liveAck(d.id, u.id), listed = d.signers.includes(u.id);
+    let body;
+    if (a) body = `<p class="notice ok" style="margin-bottom:0">You acknowledged this document on ${fmtDateTime(a.at)}.</p>`;
+    else if (listed && d.status === "open") body = `<div class="actions" style="margin-top:0"><button type="button" data-action="open-sign" data-token="${d.token}">Sign this document</button><span class="hint">You're on this document's list and haven't signed yet.</span></div>`;
+    else if (listed) body = `<p class="hint">You're on the list, but the link is closed. Reopen it to sign.</p>`;
+    else body = `<div class="actions" style="margin-top:0"><button type="button" class="secondary" data-action="add-me" data-id="${d.id}" data-then="stay">Add me to this list</button>${d.status === "open" ? `<button type="button" data-action="add-me" data-id="${d.id}" data-then="sign">Add me and sign now</button>` : ""}<span class="hint">Admins acknowledge documents the same way as everyone else.</span></div>`;
+    return `<section class="card" aria-labelledby="mine-h"><h2 id="mine-h">Your acknowledgement</h2>${body}</section>`;
   }
 
   function viewPeople() {
@@ -642,6 +655,12 @@ details[open] summary { margin-bottom: 4px; }
       case "remove-signer": {
         const d = docById(ui.docId); d.signers = d.signers.filter((s) => s !== id);
         save(); render(); return toast(`Removed ${userById(id).name} from this document.`);
+      }
+      case "add-me": {
+        const d = docById(id), u = me();
+        if (!d.signers.includes(u.id)) d.signers.push(u.id);
+        if (el.getAttribute("data-then") === "sign") return go("sign", { token: d.token, justSigned: false });
+        save(); render(); return toast("You're on this document's list.");
       }
       case "make-link": ui.links[id] = token(); save(); render(); return toast("Link created. Copy it and share it.");
       case "open-account": delete ui.links[id]; return go("account", { accountFor: id, userId: null });

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { queryOne } from "@/lib/db";
 import { formatDate, formatDateTime, isOverdue } from "@/lib/format";
+import { addMeAsSigner } from "@/app/admin/actions";
 import { requireUser } from "@/lib/session";
 import { isWellFormedToken } from "@/lib/tokens";
 import SignForm from "./SignForm";
@@ -79,6 +80,14 @@ export default async function SignPage({
         <div className="notice ok" role="status">
           <strong>{confirmed ? "Thank you. " : ""}You acknowledged this document on {formatDateTime(doc.acknowledged_at)}.</strong>
         </div>
+      ) : !doc.is_expected && user.role === "admin" && doc.status === "open" ? (
+        <form action={addMeAsSigner}>
+          <p className="notice warn">You&apos;re not on this document&apos;s list yet. As an admin, you can add yourself.</p>
+          <input type="hidden" name="document_id" value={doc.id} />
+          <button type="submit" name="then" value="sign">
+            Add me to the list
+          </button>
+        </form>
       ) : !doc.is_expected ? (
         <p className="notice warn">
           You&apos;re not on the list for this document. If you think you should be, contact your admin.

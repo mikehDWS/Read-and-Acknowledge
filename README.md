@@ -82,6 +82,8 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Close a link so no more signatures are accepted, and reopen it.
 - Void a mistaken acknowledgement with a reason; the record and reason are kept.
 - Export acknowledgement records to CSV, filtered by document and date range.
+- Acknowledge documents themselves: **Add me to this list** on a document's page (or on its sign
+  page), then sign it like anyone else. Their documents also appear under **My documents**.
 - Manage people: edit names, emails and employee IDs, make or remove admins, and create
   set-password or reset links.
 

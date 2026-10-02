@@ -179,6 +179,34 @@ export async function removeSigner(form: FormData): Promise<void> {
   revalidatePath("/admin");
 }
 
+/** Lets an admin put themselves on a document's list so they can acknowledge it too. */
+export async function addMeAsSigner(form: FormData): Promise<void> {
+  const admin = await assertAdmin();
+  const documentId = text(form, "document_id", 36);
+  if (!isUuid(documentId)) return;
+  const linkToken = await transaction(async (db) => {
+    const doc = await queryOne<{ link_token: string }>(
+      "SELECT link_token FROM documents WHERE id = $1 FOR UPDATE",
+      [documentId],
+      db,
+    );
+    if (!doc) return null;
+    const added = await query(
+      `INSERT INTO expected_signers (document_id, user_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING RETURNING user_id`,
+      [documentId, admin.id],
+      db,
+    );
+    if (added.length) await audit(db, admin.id, "signers.add_self", "document", documentId);
+    return doc.link_token;
+  });
+  if (!linkToken) return;
+  revalidatePath(`/admin/documents/${documentId}`);
+  revalidatePath("/admin");
+  revalidatePath("/my");
+  if (text(form, "then", 10) === "sign") redirect(`/sign/${linkToken}`);
+}
+
 export async function addPeople(_prev: AddPeopleState, form: FormData): Promise<AddPeopleState> {
   const admin = await assertAdmin();
   const { people, problems } = parsePeopleList(text(form, "people", 500_000));

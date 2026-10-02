@@ -7,7 +7,7 @@ import { formatDate, formatDateTime, isOverdue } from "@/lib/format";
 import { appBaseUrl } from "@/lib/request";
 import { requireAdmin } from "@/lib/session";
 import { isUuid } from "@/lib/validation";
-import { removeSigner, setDocumentStatus } from "../../actions";
+import { addMeAsSigner, removeSigner, setDocumentStatus } from "../../actions";
 import { AddPeopleForm, CopyField, DocumentForm, PersonLinkButton, VoidForm } from "../../components";
 
 export const metadata: Metadata = { title: "Document" };
@@ -47,7 +47,7 @@ type Ack = {
 export default async function DocumentAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  await requireAdmin(`/admin/documents/${id}`);
+  const admin = await requireAdmin(`/admin/documents/${id}`);
 
   const doc = await queryOne<Doc>(
     `SELECT id, name, description, version_label, due_date, location_url, link_token, status, created_at
@@ -80,6 +80,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
   const signLink = `${appBaseUrl(await headers())}/sign/${doc.link_token}`;
   const signed = signers.filter((s) => s.acknowledged_at).length;
   const overdue = isOverdue(doc.due_date);
+  const me = signers.find((s) => s.id === admin.id);
 
   return (
     <>
@@ -115,6 +116,41 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
             {doc.status === "open" ? "Close link (stop accepting signatures)" : "Reopen link"}
           </button>
         </form>
+      </section>
+
+      <section className="card" aria-labelledby="mine-heading">
+        <h2 id="mine-heading" style={{ marginTop: 0 }}>
+          Your acknowledgement
+        </h2>
+        {me?.acknowledged_at ? (
+          <p className="notice ok" style={{ marginBottom: 0 }}>
+            You acknowledged this document on {formatDateTime(me.acknowledged_at)}.
+          </p>
+        ) : me ? (
+          doc.status === "open" ? (
+            <div className="actions" style={{ marginTop: 0 }}>
+              <Link href={`/sign/${doc.link_token}`} className="button">
+                Sign this document
+              </Link>
+              <span className="hint">You&apos;re on this document&apos;s list and haven&apos;t signed yet.</span>
+            </div>
+          ) : (
+            <p className="hint">You&apos;re on the list, but the link is closed. Reopen it to sign.</p>
+          )
+        ) : (
+          <form action={addMeAsSigner} className="actions" style={{ marginTop: 0 }}>
+            <input type="hidden" name="document_id" value={doc.id} />
+            <button type="submit" name="then" value="stay" className="secondary">
+              Add me to this list
+            </button>
+            {doc.status === "open" && (
+              <button type="submit" name="then" value="sign">
+                Add me and sign now
+              </button>
+            )}
+            <span className="hint">Admins acknowledge documents the same way as everyone else.</span>
+          </form>
+        )}
       </section>
 
       <h2>People expected to sign ({signers.length})</h2>
