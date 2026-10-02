@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isUniqueViolation, queryOne, transaction } from "@/lib/db";
 import { clientIp, userAgent } from "@/lib/request";
 import { getCurrentUser } from "@/lib/session";
+import { readSignature } from "@/lib/signature";
 import { ACKNOWLEDGEMENT_STATEMENT } from "@/lib/statement";
 import { isWellFormedToken } from "@/lib/tokens";
 
@@ -17,9 +18,12 @@ export async function acknowledge(_prev: AcknowledgeState, form: FormData): Prom
   const user = await getCurrentUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/sign/${token}`)}`);
 
-  if (form.get("agree") !== "yes") {
-    return { error: "Tick the box to confirm you have read and understood the document." };
-  }
+  const signature = readSignature(
+    String(form.get("signature") ?? ""),
+    String(form.get("signature_method") ?? ""),
+    String(form.get("typed_name") ?? ""),
+  );
+  if (typeof signature === "string") return { error: signature };
 
   const h = await headers();
   try {
@@ -40,12 +44,13 @@ export async function acknowledge(_prev: AcknowledgeState, form: FormData): Prom
       await db.query(
         `INSERT INTO acknowledgements
            (document_id, user_id, signer_name, signer_email, signer_department,
-            document_name, document_category, version_label, statement_text, ip_address, user_agent)
+            document_name, document_category, version_label, statement_text, ip_address, user_agent,
+            signature_png, signature_method, signature_typed_name)
          VALUES ($1, $2, $3, $4,
                  (SELECT o.name FROM users u JOIN departments o ON o.id = u.department_id WHERE u.id = $2),
                  $5,
                  (SELECT c.name FROM documents d JOIN document_categories c ON c.id = d.category_id WHERE d.id = $1),
-                 $6, $7, $8, $9)`,
+                 $6, $7, $8, $9, $10, $11, $12)`,
         [
           doc.id,
           user.id,
@@ -56,6 +61,9 @@ export async function acknowledge(_prev: AcknowledgeState, form: FormData): Prom
           ACKNOWLEDGEMENT_STATEMENT,
           clientIp(h),
           userAgent(h),
+          signature.png,
+          signature.method,
+          signature.typedName,
         ],
       );
       return "signed";

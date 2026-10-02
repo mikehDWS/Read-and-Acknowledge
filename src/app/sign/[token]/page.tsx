@@ -104,7 +104,7 @@ export default async function SignPage({
       ) : doc.status === "closed" ? (
         <p className="notice warn">This document is no longer accepting acknowledgements.</p>
       ) : (
-        <SignForm token={token} />
+        <SignForm token={token} signerName={user.name} />
       )}
 
       <p style={{ marginTop: 24 }}>

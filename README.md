@@ -1,7 +1,7 @@
 # Read and Acknowledge
 
-A web app where people sign in, open a shared link and tick a box to confirm they have read and
-understood a named document. Each acknowledgement is recorded against the person, the document and
+A web app where people sign in, open a shared link and sign to confirm they understand and will apply
+a named document. Each acknowledgement is recorded against the person, the document and
 the time, giving the organisation an audit trail.
 
 This is version 1 from the project brief: *Project Brief: Document Acknowledgement Web App*.
@@ -74,8 +74,9 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
 - Sign in with their own account (email and password).
 - See **My documents**: everything they've been asked to sign, with due dates and status.
 - Open a document's link, see its name, description, version and an optional link to where it's held,
-  tick *"I have read and understood this document."* and press **Confirm**. Confirm stays disabled
-  until the box is ticked.
+  then sign against *"I am signing to confirm I understand and will apply the contents of the document
+  being briefed."* and press **Confirm**. They draw their signature with a finger, stylus or mouse, or
+  type their name instead (the record shows it was typed). Confirm stays disabled until they've signed.
 - See a confirmation with the date and time. They can't sign the same document twice, or undo it.
 
 **Admins** (compliance, HR, legal or operations staff)
@@ -125,7 +126,7 @@ Other choices worth knowing:
 - Acknowledgements are **append-only, enforced by the database**: a trigger blocks deletes, truncates
   and edits. The only change allowed is voiding a live record once, with a reason, and who voided it.
   A partial unique index allows one live acknowledgement per person per document.
-- Each record stores the signer's name, email and department at the time, document name and category, version label, the exact statement
+- Each record stores the signature image (and whether it was drawn or typed), the signer's name, email and department at the time, document name and category, version label, the exact statement
   text, timestamp, IP address and browser user agent.
 - Admin actions (creating documents, adding and removing people, role changes, voids, account links)
   are written to an `audit_log` table.

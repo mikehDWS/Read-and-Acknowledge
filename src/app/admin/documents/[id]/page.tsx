@@ -49,6 +49,7 @@ type Ack = {
   voided_at: Date | null;
   void_reason: string | null;
   voided_by_name: string | null;
+  signature_method: "drawn" | "typed" | null;
 };
 
 export default async function DocumentAdminPage({ params }: { params: Promise<{ id: string }> }) {
@@ -81,7 +82,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
       [id],
     ),
     query<Ack>(
-      `SELECT a.id, a.signer_name, a.signer_email, a.signer_department, a.version_label, a.acknowledged_at, a.ip_address,
+      `SELECT a.id, a.signer_name, a.signer_email, a.signer_department, a.signature_method, a.version_label, a.acknowledged_at, a.ip_address,
               a.voided_at, a.void_reason, v.name AS voided_by_name
          FROM acknowledgements a LEFT JOIN users v ON v.id = a.voided_by
         WHERE a.document_id = $1
@@ -301,6 +302,7 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                 <th scope="col">Name</th>
                 <th scope="col">Signed</th>
                 <th scope="col">Version</th>
+                <th scope="col">Signature</th>
                 <th scope="col">IP address</th>
                 <th scope="col">Record</th>
               </tr>
@@ -315,6 +317,22 @@ export default async function DocumentAdminPage({ params }: { params: Promise<{ 
                   </td>
                   <td>{formatDateTime(a.acknowledged_at)}</td>
                   <td>{a.version_label ?? "—"}</td>
+                  <td>
+                    {a.signature_method ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          className="signature-img"
+                          src={`/admin/signatures/${a.id}`}
+                          alt={`Signature of ${a.signer_name}`}
+                          loading="lazy"
+                        />
+                        {a.signature_method === "typed" && <span className="hint">Typed</span>}
+                      </>
+                    ) : (
+                      <span className="hint">Ticked (before signatures)</span>
+                    )}
+                  </td>
                   <td>{a.ip_address ?? "—"}</td>
                   <td>
                     {a.voided_at ? (

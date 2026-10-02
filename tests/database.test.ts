@@ -135,6 +135,15 @@ describe.skipIf(!url)("acknowledgements table", () => {
     await expectError("UPDATE acknowledgements SET document_category = 'Customer' WHERE id = $1", [id], /voided/);
   });
 
+  it("protects a record's signature", async () => {
+    const id = await sign();
+    await expectError(
+      "UPDATE acknowledgements SET signature_png = '\\x89504e47'::bytea, signature_method = 'drawn' WHERE id = $1",
+      [id],
+      /voided/,
+    );
+  });
+
   it("only accepts web links for document locations", async () => {
     await expectError("UPDATE documents SET location_url = 'javascript:alert(1)' WHERE id = $1", [docId], /check/);
   });
