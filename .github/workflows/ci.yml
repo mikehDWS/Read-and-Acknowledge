@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/document-acknowledgement-web-app-0x1qws"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ack
+          POSTGRES_PASSWORD: ack
+          POSTGRES_DB: read_ack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ack -d read_ack_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://ack:ack@localhost:5432/read_ack_test
+      TEST_DATABASE_URL: postgres://ack:ack@localhost:5432/read_ack_test
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Apply database migrations
+        run: npm run db:migrate
+
+      - name: Tests (including database rules)
+        run: npm test
+
+      - name: Build
+        run: npm run build
