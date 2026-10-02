@@ -144,6 +144,11 @@ th { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
 .csv { font-family: var(--font-mono); font-size: 0.8rem; white-space: pre; overflow-x: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 12px 0 0; max-height: 280px; }
 details summary { cursor: pointer; color: var(--accent); }
 details[open] summary { margin-bottom: 4px; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 16px; margin-top: 8px; }
+.check-item { display: flex; gap: 8px; align-items: center; font-weight: 400; margin: 0; cursor: pointer; }
+.check-item input { width: 18px; height: 18px; flex: none; }
+.fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px 16px; margin: 20px 0 0; min-width: 0; }
+.fieldset legend { font-weight: 600; padding: 0 4px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 0.95rem; max-width: calc(100% - 32px); }
 </style>
@@ -188,25 +193,26 @@ details[open] summary { margin-bottom: 4px; }
   };
 
   // ---------- sample data ----------
+  const OUTSTATIONS = ["Head Office", "Ferrybridge", "Tuebrook", "Stirling", "Bardon", "Isle of Grain", "Humber", "Port Talbot", "Llanwern", "Milford Haven"];
   function seed() {
     const ago = (days, hours) => new Date(Date.now() - days * DAY - (hours || 0) * 3600000).toISOString();
     const users = [
-      { id: "u-jo", name: "Jo Admin", email: "jo.admin@example.com", role: "admin", hasPassword: true, employeeId: "E1001" },
-      { id: "u-sam", name: "Sam Patel", email: "sam.patel@example.com", role: "reader", hasPassword: true, employeeId: "E1042" },
-      { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "" },
-      { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077" },
-      { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "" },
-      { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "" },
+      { id: "u-jo", name: "Jo Admin", email: "jo.admin@example.com", role: "admin", hasPassword: true, employeeId: "E1001", outstation: "Head Office" },
+      { id: "u-sam", name: "Sam Patel", email: "sam.patel@example.com", role: "reader", hasPassword: true, employeeId: "E1042", outstation: "Ferrybridge" },
+      { id: "u-alex", name: "Alex Jones", email: "alex.jones@example.com", role: "reader", hasPassword: true, employeeId: "", outstation: "Humber" },
+      { id: "u-priya", name: "Priya Shah", email: "priya.shah@example.com", role: "reader", hasPassword: true, employeeId: "E1077", outstation: "Ferrybridge" },
+      { id: "u-tom", name: "Tom Evans", email: "tom.evans@example.com", role: "reader", hasPassword: true, employeeId: "", outstation: "Humber" },
+      { id: "u-mia", name: "Mia Clarke", email: "mia.clarke@example.com", role: "reader", hasPassword: false, employeeId: "", outstation: "Port Talbot" },
     ];
     const docs = [
-      { id: "d-infosec", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), signers: ["u-sam", "u-alex", "u-priya", "u-tom", "u-mia"] },
-      { id: "d-hs", name: "Health and Safety Procedures", description: "Site safety rules, PPE requirements and what to do in an emergency.", version: "2026.1", due: isoPlusDays(12), url: "https://intranet.example.com/policies/health-and-safety", status: "open", token: token(), signers: ["u-sam", "u-alex", "u-priya", "u-tom"] },
-      { id: "d-conduct", name: "Code of Conduct", description: "The standards of behaviour we expect from everyone.", version: "1.4", due: isoPlusDays(-5), url: "", status: "open", token: token(), signers: ["u-sam", "u-priya", "u-tom", "u-mia"] },
-      { id: "d-expenses", name: "Expenses Policy", description: "What you can claim and how.", version: "2025", due: isoPlusDays(-40), url: "", status: "closed", token: token(), signers: ["u-alex", "u-priya", "u-tom"] },
+      { id: "d-infosec", name: "Information Security Policy", description: "How we keep company and customer data safe, including passwords, devices and reporting incidents.", version: "3.0", due: isoPlusDays(30), url: "https://intranet.example.com/policies/infosec", status: "open", token: token(), outstations: ["Ferrybridge", "Humber", "Port Talbot"], signers: [] },
+      { id: "d-hs", name: "Health and Safety Procedures", description: "Site safety rules, PPE requirements and what to do in an emergency.", version: "2026.1", due: isoPlusDays(12), url: "https://intranet.example.com/policies/health-and-safety", status: "open", token: token(), outstations: ["Ferrybridge", "Humber"], signers: [] },
+      { id: "d-conduct", name: "Code of Conduct", description: "The standards of behaviour we expect from everyone.", version: "1.4", due: isoPlusDays(-5), url: "", status: "open", token: token(), outstations: ["Ferrybridge"], signers: ["u-tom", "u-mia"] },
+      { id: "d-expenses", name: "Expenses Policy", description: "What you can claim and how.", version: "2025", due: isoPlusDays(-40), url: "", status: "closed", token: token(), outstations: ["Humber"], signers: ["u-priya"] },
     ];
     const ack = (docId, userId, at, ip) => {
       const d = docs.find((x) => x.id === docId), u = users.find((x) => x.id === userId);
-      return { id: uid(), docId, userId, name: u.name, email: u.email, docName: d.name, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
+      return { id: uid(), docId, userId, name: u.name, email: u.email, outstation: u.outstation, docName: d.name, version: d.version, at, ip, ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0", voidedAt: null, voidedBy: null, voidReason: null };
     };
     const acks = [
       ack("d-infosec", "u-priya", ago(2, 3), "203.0.113.24"),
@@ -226,7 +232,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   // ---------- state ----------
-  const KEY = "read-ack-demo-v1";
+  const KEY = "read-ack-demo-v2";
   let data, ui;
   function load() {
     try {
@@ -243,7 +249,19 @@ details[open] summary { margin-bottom: 4px; }
   const userById = (id) => data.users.find((u) => u.id === id);
   const docById = (id) => data.docs.find((d) => d.id === id);
   const liveAck = (docId, userId) => data.acks.find((a) => a.docId === docId && a.userId === userId && !a.voidedAt);
-  const signedCount = (d) => d.signers.filter((s) => liveAck(d.id, s)).length;
+  // Expected to sign: people added by name plus everyone at the document's outstations.
+  const viaOutstation = (d, u) => !!u && !!u.outstation && (d.outstations || []).includes(u.outstation);
+  const expectedIds = (d) => {
+    const set = new Set(d.signers);
+    data.users.forEach((u) => { if (viaOutstation(d, u)) set.add(u.id); });
+    return [...set];
+  };
+  const isExpected = (d, userId) => expectedIds(d).includes(userId);
+  const signedCount = (d) => expectedIds(d).filter((s) => liveAck(d.id, s)).length;
+  const outstationOptions = (selected, emptyLabel) => `<option value="">${emptyLabel}</option>` +
+    OUTSTATIONS.map((o) => `<option value="${esc(o)}"${o === selected ? " selected" : ""}>${esc(o)}</option>`).join("");
+  const outstationChecks = (prefix, selected) => `<div class="check-grid">${OUTSTATIONS.map((o, i) =>
+    `<label class="check-item" for="${prefix}-${i}"><input type="checkbox" id="${prefix}-${i}" name="outstations" value="${esc(o)}"${selected.includes(o) ? " checked" : ""}> ${esc(o)}</label>`).join("")}</div>`;
 
   let flash = null; // one-off message for the next render
   function go(view, extra) {
@@ -265,7 +283,7 @@ details[open] summary { margin-bottom: 4px; }
     input.split(/\r?\n/).forEach((raw, i) => {
       const line = raw.trim(); if (!line) return;
       const isFirst = first; first = false;
-      let name = "", email = "";
+      let name = "", email = "", outstation;
       const angle = line.match(/^(.*?)<([^>]+)>\s*$/);
       if (angle) { name = angle[1].trim().replace(/^"|"$/g, "").trim(); email = angle[2].trim(); }
       else {
@@ -275,22 +293,30 @@ details[open] summary { margin-bottom: 4px; }
           if (isFirst && /e-?mail/i.test(line)) return;
           problems.push({ line: i + 1, text: line, reason: "No email address found" }); return;
         }
-        email = parts[ei]; name = parts.filter((_, j) => j !== ei).join(" ").trim();
+        email = parts[ei];
+        const oi = parts.findIndex((q, j) => j !== ei && OUTSTATIONS.some((o) => o.toLowerCase() === q.toLowerCase()));
+        if (oi !== -1) outstation = OUTSTATIONS.find((o) => o.toLowerCase() === parts[oi].toLowerCase());
+        name = parts.filter((_, j) => j !== ei && j !== oi).join(" ").trim();
       }
       email = email.toLowerCase();
       if (!EMAIL_RE.test(email)) { problems.push({ line: i + 1, text: line, reason: "Email address doesn't look valid" }); return; }
       if (!name) name = email.split("@")[0];
       if (seen.has(email)) return; seen.add(email);
-      people.push({ name, email });
+      people.push({ name, email, outstation });
     });
     return { people, problems };
   }
-  function upsertPeople(people) {
+  // A line's own outstation wins; otherwise the chosen one applies to new people and anyone without one.
+  function upsertPeople(people, defaultOutstation) {
     let created = 0;
     const ids = people.map((p) => {
       const found = data.users.find((u) => u.email.toLowerCase() === p.email);
-      if (found) return found.id;
-      const u = { id: "u-" + uid(), name: p.name, email: p.email, role: "reader", hasPassword: false, employeeId: "" };
+      if (found) {
+        if (p.outstation) found.outstation = p.outstation;
+        else if (!found.outstation && defaultOutstation) found.outstation = defaultOutstation;
+        return found.id;
+      }
+      const u = { id: "u-" + uid(), name: p.name, email: p.email, role: "reader", hasPassword: false, employeeId: "", outstation: p.outstation || defaultOutstation || "" };
       data.users.push(u); created++; return u.id;
     });
     return { ids, created };
@@ -304,12 +330,12 @@ details[open] summary { margin-bottom: 4px; }
     if (/[",\r\n]/.test(t)) t = '"' + t.replace(/"/g, '""') + '"';
     return t;
   }
-  function buildCsv(docId, from, to) {
-    const header = ["acknowledgement_id", "document", "version", "name", "email", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
+  function buildCsv(docId, from, to, outstation) {
+    const header = ["acknowledgement_id", "document", "version", "name", "email", "outstation", "employee_id", "acknowledged_at_utc", "statement", "ip_address", "user_agent", "status", "voided_at_utc", "voided_by", "void_reason"];
     const rows = data.acks
-      .filter((a) => (!docId || a.docId === docId) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
+      .filter((a) => (!docId || a.docId === docId) && (!outstation || a.outstation === outstation) && (!from || a.at.slice(0, 10) >= from) && (!to || a.at.slice(0, 10) <= to))
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map((a) => [a.id, a.docName, a.version, a.name, a.email, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
+      .map((a) => [a.id, a.docName, a.version, a.name, a.email, a.outstation, (userById(a.userId) || {}).employeeId, a.at, STATEMENT, a.ip, a.ua, a.voidedAt ? "voided" : "valid", a.voidedAt, a.voidedBy, a.voidReason]);
     return { text: [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), count: rows.length };
   }
 
@@ -357,7 +383,7 @@ details[open] summary { margin-bottom: 4px; }
 
   function viewMy() {
     const u = me();
-    const docs = data.docs.filter((d) => d.signers.includes(u.id))
+    const docs = data.docs.filter((d) => isExpected(d, u.id))
       .sort((a, b) => (!!liveAck(a.id, u.id) - !!liveAck(b.id, u.id)) || String(a.due || "9").localeCompare(String(b.due || "9")));
     const outstanding = docs.filter((d) => !liveAck(d.id, u.id) && d.status === "open").length;
     const lead = docs.length === 0 ? "You haven't been asked to acknowledge any documents yet."
@@ -377,7 +403,7 @@ details[open] summary { margin-bottom: 4px; }
     const d = data.docs.find((x) => x.token === ui.token);
     if (!d) return viewNotFound();
     const a = liveAck(d.id, u.id);
-    const expected = d.signers.includes(u.id);
+    const expected = isExpected(d, u.id);
     let body;
     if (a) body = `<div class="notice ok" role="status"><strong>${ui.justSigned ? "Thank you. " : ""}You acknowledged this document on ${fmtDateTime(a.at)}.</strong></div>`;
     else if (!expected && u.role === "admin" && d.status === "open") body = `<p class="notice warn">You're not on this document's list yet. As an admin, you can add yourself.</p><button type="button" data-action="add-me" data-id="${d.id}" data-then="sign">Add me to the list</button>`;
@@ -408,10 +434,13 @@ details[open] summary { margin-bottom: 4px; }
     return `<div class="fade">
       <div class="title-row"><h1>Documents</h1><button type="button" data-go="new">New document</button></div>
       <div class="table-wrap" style="margin-top:16px"><table>
-        <thead><tr><th scope="col">Document</th><th scope="col">Due</th><th scope="col">Signed</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead>
+        <thead><tr><th scope="col">Document</th><th scope="col">Outstations</th><th scope="col">Due</th><th scope="col">Signed</th><th scope="col">Outstanding</th><th scope="col">Status</th></tr></thead>
         <tbody>${docs.map((d) => {
-          const s = signedCount(d), n = d.signers.length, out = n - s, pct = n ? Math.round((s / n) * 100) : 0;
+          const s = signedCount(d), n = expectedIds(d).length, out = n - s, pct = n ? Math.round((s / n) * 100) : 0;
+          const os = (d.outstations || []);
+          const osText = os.length === 0 ? `<span class="hint">Named people only</span>` : os.length === OUTSTATIONS.length ? "All outstations" : esc(os.join(", "));
           return `<tr><td><button type="button" class="link-button" data-action="open-doc" data-id="${d.id}">${esc(d.name)}</button>${d.version ? `<span class="hint">Version ${esc(d.version)}</span>` : ""}</td>
+            <td>${osText}</td>
             <td>${d.due ? fmtDate(d.due) : "—"}${out > 0 && d.status === "open" && isOverdue(d.due) ? ` <span class="badge bad">Overdue</span>` : ""}</td>
             <td>${s} of ${n}<div class="progress" aria-hidden="true"><span style="width:${pct}%"></span></div></td>
             <td>${out}</td>
@@ -422,17 +451,17 @@ details[open] summary { margin-bottom: 4px; }
       <form class="card" data-form="export">
         <div class="grid-2">
           <div><label for="exp-doc">Document</label><select id="exp-doc" name="doc"><option value="">All documents</option>${data.docs.map((d) => `<option value="${d.id}"${csv && csv.docId === d.id ? " selected" : ""}>${esc(d.name)}${d.version ? ` (${esc(d.version)})` : ""}</option>`).join("")}</select></div>
-          <div></div>
+          <div><label for="exp-os">Outstation</label><select id="exp-os" name="outstation">${outstationOptions(csv ? csv.outstation : "", "All outstations")}</select></div>
           <div><label for="exp-from">Signed from</label><input id="exp-from" name="from" type="date" value="${csv ? esc(csv.from) : ""}"></div>
           <div><label for="exp-to">Signed to</label><input id="exp-to" name="to" type="date" value="${csv ? esc(csv.to) : ""}"></div>
         </div>
-        <div class="actions"><button type="submit">Show CSV</button><span class="hint">The real app downloads a .csv file. Here it's shown below to copy. Includes voided records.</span></div>
+        <div class="actions"><button type="submit">Show CSV</button><span class="hint">The real app downloads a .csv file. Here it's shown below to copy. Includes voided records. The outstation is the one each person was at when they signed.</span></div>
         ${csv ? csvBlock(csv) : ""}
       </form></div>`;
   }
 
   function csvBlock(csv) {
-    const built = buildCsv(csv.docId, csv.from, csv.to);
+    const built = buildCsv(csv.docId, csv.from, csv.to, csv.outstation);
     return `<p class="hint" style="margin-top:16px">${built.count} ${built.count === 1 ? "record" : "records"}.</p>
       <pre class="csv" id="csv-text">${esc(built.text)}</pre>
       <div class="actions"><button type="button" class="secondary" data-action="copy" data-target="csv-text">Copy CSV</button></div>`;
@@ -441,7 +470,7 @@ details[open] summary { margin-bottom: 4px; }
   function viewNew() {
     return `<div class="fade"><p><button type="button" class="link-button" data-go="admin">← Documents</button></p>
       <h1>New document</h1>
-      <p class="lead">Record the document by name. Readers read it wherever it's held today; you'll add the people who need to sign it next.</p>
+      <p class="lead">Record the document by name, and choose which outstations need to acknowledge it. Readers read it wherever it's held today.</p>
       <div class="card">${documentForm(null)}</div></div>`;
   }
 
@@ -461,6 +490,7 @@ details[open] summary { margin-bottom: 4px; }
       </div>
       <label for="${p}-url">Where the document is held <span class="hint">Optional web link, e.g. an intranet page</span></label>
       <input id="${p}-url" name="url" type="url" placeholder="https://" value="${esc(d ? d.url : "")}">
+      ${d ? "" : `<fieldset class="fieldset"><legend>Outstations that need to acknowledge this <span class="hint">Everyone at these outstations will need to sign. You can also add individual people next.</span></legend>${outstationChecks("new-os", [])}</fieldset>`}
       <div class="actions"><button type="submit">${d ? "Save changes" : "Create document"}</button></div>
     </form>`;
   }
@@ -468,8 +498,10 @@ details[open] summary { margin-bottom: 4px; }
   function addPeopleForm(scope) {
     const f = flash && flash.form === "people-" + scope ? flash : null;
     return `<form data-form="add-people" data-scope="${scope}">
-      <label for="people-${scope}">People <span class="hint">One per line: <code>Name, email</code>. You can paste two columns (name and email) straight from a spreadsheet. New email addresses get a reader account.</span></label>
-      <textarea id="people-${scope}" name="people" placeholder="Lee Brown, lee.brown@example.com&#10;Ana Silva, ana.silva@example.com">${f && f.keep ? esc(f.keep) : ""}</textarea>
+      <label for="people-${scope}">People <span class="hint">One per line: <code>Name, email</code>, optionally with an outstation: <code>Name, email, Ferrybridge</code>. You can paste columns straight from a spreadsheet. New email addresses get a reader account.</span></label>
+      <textarea id="people-${scope}" name="people" placeholder="Lee Brown, lee.brown@example.com&#10;Ana Silva, ana.silva@example.com, Humber">${f && f.keep ? esc(f.keep) : ""}</textarea>
+      <label for="people-os-${scope}">Outstation <span class="hint">For anyone without an outstation yet. An outstation on a line takes priority.</span></label>
+      <select id="people-os-${scope}" name="outstation">${outstationOptions("", "Don't set an outstation")}</select>
       ${f && f.error ? `<p class="notice bad" role="alert">${esc(f.error)}</p>` : ""}
       ${f && f.summary ? `<p class="notice ok" role="status">${esc(f.summary)}</p>` : ""}
       ${f && f.problems && f.problems.length ? `<div class="notice warn" role="alert">These lines were skipped:<ul>${f.problems.map((p) => `<li>Line ${p.line}: <code>${esc(p.text)}</code> (${esc(p.reason)})</li>`).join("")}</ul></div>` : ""}
@@ -491,10 +523,17 @@ details[open] summary { margin-bottom: 4px; }
   function viewDoc() {
     const d = docById(ui.docId);
     if (!d) return viewNotFound();
-    const s = signedCount(d), n = d.signers.length;
+    const ids = expectedIds(d), s = signedCount(d), n = ids.length;
     const overdue = isOverdue(d.due);
-    const signers = d.signers.map(userById).filter(Boolean)
-      .sort((a, b) => (!!liveAck(d.id, a.id) - !!liveAck(d.id, b.id)) || a.name.localeCompare(b.name));
+    const signers = ids.map(userById).filter(Boolean)
+      .sort((a, b) => (!!liveAck(d.id, a.id) - !!liveAck(d.id, b.id)) || OUTSTATIONS.indexOf(a.outstation) - OUTSTATIONS.indexOf(b.outstation) || a.name.localeCompare(b.name));
+    const progress = new Map();
+    signers.forEach((u) => {
+      const key = u.outstation || "No outstation", row = progress.get(key) || { signed: 0, total: 0 };
+      row.total++; if (liveAck(d.id, u.id)) row.signed++; progress.set(key, row);
+    });
+    const order = [...OUTSTATIONS, "No outstation"];
+    const progressRows = [...progress.entries()].sort(([a], [b]) => order.indexOf(a) - order.indexOf(b));
     const acks = data.acks.filter((a) => a.docId === d.id).sort((a, b) => b.at.localeCompare(a.at));
     const link = `${BASE}/sign/${d.token}`;
     return `<div class="fade">
@@ -514,23 +553,34 @@ details[open] summary { margin-bottom: 4px; }
 
       ${myPanel(d)}
 
+      <section class="card" aria-labelledby="os-h"><h2 id="os-h">Outstations that need to acknowledge this</h2>
+        <form data-form="doc-outstations">${outstationChecks("doc-os", d.outstations || [])}
+          <div class="actions"><button type="submit">Save outstations</button><span class="hint">Everyone at a ticked outstation needs to sign, including people who join it later.</span></div>
+        </form></section>
+
+      ${progressRows.length ? `<h2>Progress by outstation</h2><div class="table-wrap"><table>
+        <thead><tr><th scope="col">Outstation</th><th scope="col">Signed</th><th scope="col">Outstanding</th></tr></thead>
+        <tbody>${progressRows.map(([name, r]) => `<tr><td>${esc(name)}</td><td>${r.signed} of ${r.total}</td><td>${r.total - r.signed}</td></tr>`).join("")}</tbody></table></div>` : ""}
+
       <h2>People expected to sign (${n})</h2>
-      ${n === 0 ? `<p>No one yet. Add people below.</p>` : `<div class="table-wrap"><table>
-        <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+      ${n === 0 ? `<p>No one yet. Tick the outstations above, or add people below.</p>` : `<div class="table-wrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Outstation</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>${signers.map((u) => {
           const a = liveAck(d.id, u.id);
+          const via = viaOutstation(d, u);
           return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span></td>
+            <td>${u.outstation ? esc(u.outstation) : `<span class="hint">Not set</span>`}${via ? "" : `<span class="hint">Added by name</span>`}</td>
             <td>${a ? `<span class="badge ok">Signed ${fmtDateTime(a.at)}</span>` : overdue ? `<span class="badge bad">Overdue</span>` : `<span class="badge warn">Outstanding</span>`}
               ${!u.hasPassword ? `<div class="row-actions" style="margin-top:6px"><span class="badge muted">No password set yet</span>${linkCell(u)}</div>` : ""}</td>
-            <td><button type="button" class="link-button" data-action="remove-signer" data-id="${u.id}" aria-label="Remove ${esc(u.name)} from this document">Remove</button></td></tr>`;
+            <td>${via ? `<span class="hint">Via ${esc(u.outstation)}</span>` : `<button type="button" class="link-button" data-action="remove-signer" data-id="${u.id}" aria-label="Remove ${esc(u.name)} from this document">Remove</button>`}</td></tr>`;
         }).join("")}</tbody></table></div>`}
 
-      <section class="card" aria-labelledby="add-h"><h2 id="add-h">Add people</h2>${addPeopleForm("doc")}</section>
+      <section class="card" aria-labelledby="add-h"><h2 id="add-h">Add individual people</h2><p class="hint">For people outside the ticked outstations, or anyone without an outstation.</p>${addPeopleForm("doc")}</section>
 
       <h2>Acknowledgement records (${acks.length})</h2>
       ${acks.length === 0 ? `<p>No acknowledgements yet.</p>` : `<div class="table-wrap"><table>
         <thead><tr><th scope="col">Name</th><th scope="col">Signed</th><th scope="col">Version</th><th scope="col">IP address</th><th scope="col">Record</th></tr></thead>
-        <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}<span class="hint">${esc(a.email)}</span></td>
+        <tbody>${acks.map((a) => `<tr><td>${esc(a.name)}<span class="hint">${esc(a.email)}</span>${a.outstation ? `<span class="hint">${esc(a.outstation)}</span>` : ""}</td>
           <td>${fmtDateTime(a.at)}</td><td>${esc(a.version || "—")}</td><td>${esc(a.ip || "—")}</td>
           <td>${a.voidedAt ? `<span class="badge muted">Voided</span><span class="hint">${fmtDateTime(a.voidedAt)} by ${esc(a.voidedBy)}: ${esc(a.voidReason)}</span>`
             : `<details><summary>Void</summary><form data-form="void" data-id="${a.id}">
@@ -547,7 +597,7 @@ details[open] summary { margin-bottom: 4px; }
   }
 
   function myPanel(d) {
-    const u = me(), a = liveAck(d.id, u.id), listed = d.signers.includes(u.id);
+    const u = me(), a = liveAck(d.id, u.id), listed = isExpected(d, u.id);
     let body;
     if (a) body = `<p class="notice ok" style="margin-bottom:0">You acknowledged this document on ${fmtDateTime(a.at)}.</p>`;
     else if (listed && d.status === "open") body = `<div class="actions" style="margin-top:0"><button type="button" data-action="open-sign" data-token="${d.token}">Sign this document</button><span class="hint">You're on this document's list and haven't signed yet.</span></div>`;
@@ -558,7 +608,9 @@ details[open] summary { margin-bottom: 4px; }
 
   function viewPeople() {
     const q = (ui.q || "").toLowerCase();
-    const list = data.users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+    const osFilter = ui.qOutstation || "";
+    const list = data.users.filter((u) => (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+        && (!osFilter || (osFilter === "none" ? !u.outstation : u.outstation === osFilter)))
       .sort((a, b) => a.name.localeCompare(b.name));
     const admin = me();
     return `<div class="fade"><h1>People</h1>
@@ -566,19 +618,23 @@ details[open] summary { margin-bottom: 4px; }
       <form class="copy-row" data-form="search" role="search" style="margin:16px 0">
         <label for="q" class="visually-hidden">Search people</label>
         <input id="q" name="q" type="search" placeholder="Search by name or email" value="${esc(ui.q || "")}">
+        <label for="q-os" class="visually-hidden">Outstation</label>
+        <select id="q-os" name="outstation" style="width:auto">${outstationOptions(osFilter, "All outstations")}<option value="none"${osFilter === "none" ? " selected" : ""}>No outstation</option></select>
         <button type="submit" class="secondary">Search</button>
       </form>
       ${list.length === 0 ? `<p>No people found.</p>` : `<div class="table-wrap"><table>
-        <thead><tr><th scope="col">Name</th><th scope="col">Account</th><th scope="col">Role</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <thead><tr><th scope="col">Name</th><th scope="col">Outstation</th><th scope="col">Account</th><th scope="col">Role</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>${list.map((u) => {
-          const docs = data.docs.filter((d) => d.signers.includes(u.id)).length;
+          const docs = data.docs.filter((d) => isExpected(d, u.id)).length;
           return `<tr><td>${esc(u.name)}<span class="hint">${esc(u.email)}</span>${u.employeeId ? `<span class="hint">ID ${esc(u.employeeId)}</span>` : ""}<span class="hint">${docs} ${docs === 1 ? "document" : "documents"}</span></td>
+            <td>${u.outstation ? esc(u.outstation) : `<span class="hint">Not set</span>`}</td>
             <td>${u.hasPassword ? `<span class="badge ok">Active</span>` : `<span class="badge muted">No password set</span>`}<div style="margin-top:6px">${linkCell(u)}</div></td>
             <td>${u.role === "admin" ? "Admin" : "Reader"}${u.id !== admin.id ? `<br><button type="button" class="link-button" data-action="toggle-role" data-id="${u.id}">${u.role === "admin" ? "Remove admin" : "Make admin"}</button>` : ""}</td>
             <td><details><summary>Edit</summary><form data-form="person" data-id="${u.id}">
               <label for="pn-${u.id}">Name</label><input id="pn-${u.id}" name="name" type="text" required value="${esc(u.name)}">
               <label for="pe-${u.id}">Email</label><input id="pe-${u.id}" name="email" type="email" required value="${esc(u.email)}">
               <label for="pi-${u.id}">Employee ID <span class="hint">Optional. Never shown to other readers.</span></label><input id="pi-${u.id}" name="employeeId" type="text" value="${esc(u.employeeId)}">
+              <label for="po-${u.id}">Outstation</label><select id="po-${u.id}" name="outstation">${outstationOptions(u.outstation, "No outstation")}</select>
               ${flash && flash.form === "person-" + u.id ? `<p class="notice ${flash.ok ? "ok" : "bad"}">${esc(flash.text)}</p>` : ""}
               <div class="actions"><button type="submit">Save</button></div></form></details></td></tr>`;
         }).join("")}</tbody></table></div>`}
@@ -658,7 +714,7 @@ details[open] summary { margin-bottom: 4px; }
       }
       case "add-me": {
         const d = docById(id), u = me();
-        if (!d.signers.includes(u.id)) d.signers.push(u.id);
+        if (!isExpected(d, u.id)) d.signers.push(u.id);
         if (el.getAttribute("data-then") === "sign") return go("sign", { token: d.token, justSigned: false });
         save(); render(); return toast("You're on this document's list.");
       }
@@ -670,7 +726,7 @@ details[open] summary { margin-bottom: 4px; }
       }
       case "sample-people": {
         const ta = document.getElementById(el.getAttribute("data-target"));
-        ta.value = "Name\tEmail\nLee Brown\tlee.brown@example.com\nAna Silva\tana.silva@example.com\nSam Patel\tsam.patel@example.com\nnot an email";
+        ta.value = "Name\tEmail\tOutstation\nLee Brown\tlee.brown@example.com\tStirling\nAna Silva\tana.silva@example.com\tIsle of Grain\nSam Patel\tsam.patel@example.com\nnot an email";
         return ta.focus();
       }
       case "copy": {
@@ -722,7 +778,7 @@ details[open] summary { margin-bottom: 4px; }
       if (!f.get("agree")) return;
       const u = me(), d = data.docs.find((x) => x.token === ui.token);
       if (!liveAck(d.id, u.id)) {
-        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, docName: d.name, version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
+        data.acks.push({ id: uid(), docId: d.id, userId: u.id, name: u.name, email: u.email, outstation: u.outstation || "", docName: d.name, version: d.version, at: new Date().toISOString(), ip: "203.0.113.99", ua: navigator.userAgent.slice(0, 200), voidedAt: null, voidedBy: null, voidReason: null });
       }
       return go("sign", { justSigned: true });
     }
@@ -733,7 +789,7 @@ details[open] summary { margin-bottom: 4px; }
       if (url && !/^https?:\/\/\S+$/i.test(url)) { flash = { form: formKey, text: "The document location must be a web address starting with http:// or https://." }; return render(); }
       const fields = { name, description: val("description"), version: val("version"), due: val("due"), url };
       if (kind === "doc-new") {
-        const d = Object.assign({ id: "d-" + uid(), status: "open", token: token(), signers: [] }, fields);
+        const d = Object.assign({ id: "d-" + uid(), status: "open", token: token(), signers: [], outstations: f.getAll("outstations").map(String) }, fields);
         data.docs.push(d); return go("doc", { docId: d.id });
       }
       Object.assign(docById(ui.docId), fields);
@@ -744,11 +800,11 @@ details[open] summary { margin-bottom: 4px; }
       const raw = String(f.get("people") || "");
       const { people, problems } = parsePeople(raw);
       if (!people.length) { flash = { form: "people-" + scope, error: problems.length ? "No valid lines found." : "Add at least one person.", problems, keep: raw }; return render(); }
-      const { ids, created } = upsertPeople(people);
+      const { ids, created } = upsertPeople(people, val("outstation"));
       let summary;
       if (scope === "doc") {
         const d = docById(ui.docId);
-        const fresh = ids.filter((x) => !d.signers.includes(x));
+        const fresh = ids.filter((x) => !isExpected(d, x));
         d.signers.push(...fresh);
         const already = ids.length - fresh.length;
         summary = `Added ${fresh.length} to this document${already ? `; ${already} ${already === 1 ? "was" : "were"} already on the list` : ""}. ${created} new ${created === 1 ? "account" : "accounts"} created.`;
@@ -765,18 +821,22 @@ details[open] summary { margin-bottom: 4px; }
       save(); render(); return toast(`Voided. ${a.name} can sign again.`);
     }
     if (kind === "export") {
-      ui.csv = { docId: val("doc"), from: val("from"), to: val("to") };
+      ui.csv = { docId: val("doc"), outstation: val("outstation"), from: val("from"), to: val("to") };
       save(); render();
       const pre = document.getElementById("csv-text"); if (pre) pre.scrollIntoView({ block: "nearest" });
       return;
     }
-    if (kind === "search") { ui.q = val("q"); save(); return render(); }
+    if (kind === "search") { ui.q = val("q"); ui.qOutstation = val("outstation"); save(); return render(); }
+    if (kind === "doc-outstations") {
+      docById(ui.docId).outstations = f.getAll("outstations").map(String);
+      save(); render(); return toast("Outstations saved.");
+    }
     if (kind === "person") {
       const u = userById(form.getAttribute("data-id")), email = val("email").toLowerCase();
       if (!val("name")) { flash = { form: "person-" + u.id, text: "Enter a name." }; return render(); }
       if (!EMAIL_RE.test(email)) { flash = { form: "person-" + u.id, text: "Enter a valid email address." }; return render(); }
       if (data.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email)) { flash = { form: "person-" + u.id, text: "Someone else already uses that email address." }; return render(); }
-      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId") });
+      Object.assign(u, { name: val("name"), email, employeeId: val("employeeId"), outstation: val("outstation") });
       save(); render(); return toast("Saved.");
     }
     if (kind === "account") {
