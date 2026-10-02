@@ -90,6 +90,10 @@ a database: open the file directly, or publish it with GitHub Pages. Changes sta
   Tuebrook, Stirling, Bardon, Isle of Grain, Humber, Port Talbot, Llanwern, Milford Haven, Engineering,
   Health and Safety, Purchasing, Operations Management and Fleet Control. Each person is in one department.
 - See progress by department on each document, and filter people and CSV exports by department.
+- Give departments **managers** (in a person's **Edit** form, tick the departments they manage). Managers
+  get a **My team** page showing, for each open document, who in their departments has signed and who
+  still needs to, with the sign link to chase them. They see sign status only, not signatures, and
+  can't open the admin pages unless they're also an admin.
 - Add the people expected to sign, typed in or pasted straight from a spreadsheet (`Name, email`, two
   tab-separated columns in either order, or `Name <email>`). New email addresses get a reader account.
 - Copy the document's sign link and share it themselves.

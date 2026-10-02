@@ -14,6 +14,8 @@ type Person = {
   employee_id: string | null;
   department_id: number | null;
   department: string | null;
+  manages_ids: number[];
+  manages: string[];
   role: "reader" | "admin";
   has_password: boolean;
   locked: boolean;
@@ -34,6 +36,10 @@ export default async function PeoplePage({
     department === "none" ? "none" : departments.find((o) => String(o.id) === department)?.id ?? null;
   const people = await query<Person>(
     `SELECT u.id, u.name, u.email, u.employee_id, u.department_id, o.name AS department, u.role,
+            ARRAY(SELECT dm.department_id FROM department_managers dm JOIN departments md ON md.id = dm.department_id
+                   WHERE dm.user_id = u.id ORDER BY md.sort_order) AS manages_ids,
+            ARRAY(SELECT md.name FROM department_managers dm JOIN departments md ON md.id = dm.department_id
+                   WHERE dm.user_id = u.id ORDER BY md.sort_order) AS manages,
 
             u.password_hash IS NOT NULL AS has_password,
             coalesce(u.locked_until > now(), false) AS locked,
@@ -109,6 +115,7 @@ export default async function PeoplePage({
                   </td>
                   <td>
                     {p.department ?? <span className="hint">No department</span>}
+                    {p.manages.length > 0 && <span className="hint">Manages {p.manages.join(", ")}</span>}
                   </td>
                   <td>
                     {p.has_password ? (

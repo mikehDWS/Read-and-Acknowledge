@@ -33,3 +33,13 @@ export type DocumentCategory = { id: number; name: string };
 export function listCategories(db?: Queryable): Promise<DocumentCategory[]> {
   return query<DocumentCategory>("SELECT id, name FROM document_categories ORDER BY sort_order, name", [], db);
 }
+
+/** Departments a person manages, in list order. */
+export function managedDepartments(userId: string, db?: Queryable): Promise<Department[]> {
+  return query<Department>(
+    `SELECT d.id, d.name FROM department_managers dm JOIN departments d ON d.id = dm.department_id
+      WHERE dm.user_id = $1 ORDER BY d.sort_order, d.name`,
+    [userId],
+    db,
+  );
+}

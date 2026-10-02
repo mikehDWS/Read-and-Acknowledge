@@ -327,7 +327,9 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
   const name = text(form, "name", 200);
   const email = text(form, "email", 254).toLowerCase();
   const employeeId = optionalText(form, "employee_id", 100);
-  const departmentId = departmentIdFrom(form.get("department_id"), await listDepartments());
+  const departments = await listDepartments();
+  const departmentId = departmentIdFrom(form.get("department_id"), departments);
+  const managesIds = idsFrom(form, "manages_ids", departments);
   if (!isUuid(id)) return { error: "Person not found." };
   if (departmentId === undefined) return { error: "Choose a department from the list." };
   if (!name) return { error: "Enter a name." };
@@ -340,11 +342,23 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
         [id, name, email, employeeId, departmentId],
         db,
       );
+      await query(
+        "DELETE FROM department_managers WHERE user_id = $1 AND NOT (department_id = ANY($2::int[]))",
+        [id, managesIds],
+        db,
+      );
+      await query(
+        `INSERT INTO department_managers (department_id, user_id)
+         SELECT unnest($2::int[]), $1 ON CONFLICT DO NOTHING`,
+        [id, managesIds],
+        db,
+      );
       await audit(db, admin.id, "user.update", "user", id, {
         name,
         email,
         employee_id: employeeId,
         department_id: departmentId,
+        manages_department_ids: managesIds,
       });
     });
   } catch (err) {
@@ -353,6 +367,7 @@ export async function updatePerson(_prev: PersonFormState, form: FormData): Prom
   }
   revalidatePath("/admin/people");
   revalidatePath("/admin");
+  revalidatePath("/team");
   return { saved: true };
 }
 

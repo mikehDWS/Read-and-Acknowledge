@@ -359,6 +359,7 @@ type PersonValues = {
   email: string;
   employee_id: string | null;
   department_id: number | null;
+  manages_ids: number[];
 };
 
 export function PersonEditForm({
@@ -389,6 +390,10 @@ export function PersonEditForm({
           defaultValue={person.department_id}
           emptyLabel="No department"
         />
+        <p className="group-label">
+          Manages <span className="hint">Managers see who in these departments still needs to sign.</span>
+        </p>
+        <GroupChecks name="manages_ids" idPrefix={`mg-${person.id}`} items={departments} selected={person.manages_ids} />
 
         {state.error && (
           <p className="notice bad" role="alert">
