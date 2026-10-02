@@ -18,6 +18,9 @@ export function userAgent(headers: HeaderLike): string | null {
 export function appBaseUrl(headers: HeaderLike): string {
   const configured = process.env.APP_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
+  // On Vercel, use the project's production domain so links don't point at a preview build.
+  const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelDomain) return `https://${vercelDomain.replace(/\/$/, "")}`;
   const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? "localhost:3000";
   const proto = headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;

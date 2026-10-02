@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "node scripts/migrate.mjs",
-    "create-admin": "node scripts/create-admin.mjs"
+    "create-admin": "node scripts/create-admin.mjs",
+    "vercel-build": "node scripts/migrate.mjs --if-configured && next build"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",

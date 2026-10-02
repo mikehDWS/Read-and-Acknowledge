@@ -1,4 +1,6 @@
 // Applies db/migrations/*.sql in filename order, each once, inside a transaction.
+// With --if-configured (used by the Vercel build), a missing database is a warning, not an error,
+// so the first deploy succeeds before a database has been connected.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,14 +8,27 @@ import pg from "pg";
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "db", "migrations");
 
-if (!process.env.DATABASE_URL) {
+// Prefer a direct (unpooled) connection for schema changes when the host provides one.
+const url =
+  process.env.DATABASE_URL_UNPOOLED ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL;
+
+if (!url) {
+  if (process.argv.includes("--if-configured")) {
+    console.warn("No database connected yet (DATABASE_URL is not set); skipping migrations.");
+    process.exit(0);
+  }
   console.error("DATABASE_URL is not set");
   process.exit(1);
 }
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
+  // Stops two deploys migrating at the same time.
+  await client.query("SELECT pg_advisory_lock(727274)");
   await client.query(
     "CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
   );

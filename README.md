@@ -6,6 +6,29 @@ the time, giving the organisation an audit trail.
 
 This is version 1 from the project brief: *Project Brief: Document Acknowledgement Web App*.
 
+## Put it online with Vercel
+
+[Vercel](https://vercel.com) builds the app straight from this GitHub repo and gives you a web link.
+Every push to `main` updates it. You'll need a free database from Neon, which Vercel connects for you.
+
+1. **Sign up** at <https://vercel.com> with your GitHub account.
+2. **Import the repo:** **Add New → Project**, pick `Read-and-Acknowledge`, then open
+   **Environment Variables** and add `SETUP_CODE` = a phrase of at least 12 characters that only you
+   know (you'll type it once on the setup page). Click **Deploy**. The first deploy works, but pages
+   show an error until the database is connected.
+3. **Add the database:** in the project, open **Storage → Create Database → Neon**, accept the
+   defaults and connect it to this project (all environments).
+4. **Redeploy:** **Deployments**, then the **⋯** menu on the latest one → **Redeploy**. This creates
+   the tables.
+5. **Create your admin account:** open `https://<your-project>.vercel.app/setup`, enter the setup
+   code, your name, email and a password. The page stops working once an admin exists.
+
+Sign links and set-password links use the project's production address automatically. To use your
+own domain instead, add it under **Settings → Domains** and set `APP_URL` to it (for example
+`https://acknowledge.example.com`), then redeploy.
+
+Vercel's free Hobby plan is for personal, non-commercial use; company use needs the Pro plan.
+
 ## Try it locally
 
 The quickest way is [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows, Mac or Linux).
@@ -121,9 +144,10 @@ document's sign link.
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | PostgreSQL connection string (`POSTGRES_URL` also works; migrations prefer `DATABASE_URL_UNPOOLED` when set) |
 | `APP_URL` | Public base URL used in the sign and set-password links admins copy |
 | `APP_TIME_ZONE` | Optional. Time zone for displayed times and due dates (default `Europe/London`) |
+| `SETUP_CODE` | Code needed on `/setup` to create the first admin when you have no command line (e.g. on Vercel) |
 | `COOKIE_SECURE` | Optional. Set to `false` only for a plain-http local trial; secure cookies are on by default in production |
 
 ## Tests

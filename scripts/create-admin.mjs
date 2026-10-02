@@ -13,12 +13,13 @@ if (!name || !email || !email.includes("@")) {
   console.error('Usage: npm run create-admin -- --name "Full Name" --email you@example.com');
   process.exit(1);
 }
-if (!process.env.DATABASE_URL) {
+const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+if (!url) {
   console.error("DATABASE_URL is not set");
   process.exit(1);
 }
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
   const { rows } = await client.query(

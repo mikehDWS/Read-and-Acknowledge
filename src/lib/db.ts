@@ -5,10 +5,18 @@ types.setTypeParser(types.builtins.DATE, (value: string) => value);
 
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
 
+/** DATABASE_URL, or POSTGRES_URL as set by some hosting database integrations. */
+export function databaseUrl(): string | undefined {
+  return process.env.DATABASE_URL || process.env.POSTGRES_URL || undefined;
+}
+
 function getPool(): Pool {
   if (!globalForPg.pgPool) {
-    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-    globalForPg.pgPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10 });
+    const connectionString = databaseUrl();
+    if (!connectionString) throw new Error("DATABASE_URL is not set");
+    // Serverless hosts run many small instances, so keep each instance's pool small.
+    const max = Number(process.env.PG_POOL_MAX) || (process.env.VERCEL ? 3 : 10);
+    globalForPg.pgPool = new Pool({ connectionString, max });
   }
   return globalForPg.pgPool;
 }
